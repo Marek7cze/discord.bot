@@ -8,7 +8,7 @@ daily_code = random.randint(1000, 9999)
 async def on_ready():
     print(f"{bot.user} is online!")
     print(f"Today's code: {daily_code}")
-    update_daily_code.start(0:00)
+    update_daily_code.start(00:00)
 @bot.command(Code)
 async def code(ctx):
     await ctx.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
