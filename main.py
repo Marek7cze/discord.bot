@@ -23,6 +23,4 @@ async def on_ready():
 async def code(ctx):
     await ctx.send(
         f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}"
-    )
-
-bot.run(TOKEN)
+    bot.run(os.getenv("DISCORD_TOKEN"))
