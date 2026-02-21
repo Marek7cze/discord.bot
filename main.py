@@ -93,7 +93,7 @@ async def code(ctx):
 # Predefined Ranks
 # -----------------------------
 RANKS = [
-    "🟫 Bronze I", "🟫 Bronze II", "🟫 Bronze III", "🟫 Bronze IV",
+ "NO RANK", "🟫 Bronze I", "🟫 Bronze II", "🟫 Bronze III", "🟫 Bronze IV",
     "⬜ Silver I", "⬜ Silver II", "⬜ Silver III", "⬜ Silver IV",
     "🟨 Gold I", "🟨 Gold II", "🟨 Gold III", "🟨 Gold IV",
     "🔥 Phoenix", "🏹 Ranger", "🏆 Champion", "👑 Master", "💎 Elite", "🌟 The Legend"
