@@ -33,10 +33,10 @@ intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 # -----------------------------
-# Server ID for instant slash commands
+# Server and Channel IDs
 # -----------------------------
-GUILD_ID = 1247900579586642021  # Your server ID
-guild = discord.Object(id=GUILD_ID)
+GUILD_ID = 1247900579586642021  # your server
+DAILY_CHANNEL_ID = 1474476859210076294  # channel for daily code
 
 # -----------------------------
 # Database setup
@@ -71,7 +71,6 @@ def add_player(discord_id, name):
 # Daily Code
 # -----------------------------
 daily_code = random.randint(1000, 9999)
-DAILY_CHANNEL_ID = 1474476859210076294  # Channel for daily code
 
 async def reset_daily_code_at_midnight():
     global daily_code
@@ -139,7 +138,8 @@ async def on_ready():
     print(f"{bot.user} is online!")
     print(f"Today's code: {daily_code}")
     try:
-        await bot.tree.sync(guild=guild)  # <-- force slash commands in your server
+        guild = discord.Object(id=GUILD_ID)
+        await bot.tree.sync(guild=guild)  # instant slash command registration
         print("Slash commands synced to your server!")
     except Exception as e:
         print("Error syncing commands:", e)
