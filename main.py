@@ -152,22 +152,22 @@ async def update(
     standoff_id: str,
     field: app_commands.Choice[str],
     rank_value: str = None,
-    kd_value: float = None
+    kd_value: app_commands.Range[float, 0.0, 1000.0] = None
 ):
     player = get_player(standoff_id)
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
+    # Updating K/D
     if field.value.lower() == "kd":
         if kd_value is None:
             await interaction.response.send_message("You must provide a number for K/D.", ephemeral=True)
             return
-        if not (0.00 <= kd_value <= 1000.00):
-            await interaction.response.send_message("K/D must be between 0.00 and 1000.00", ephemeral=True)
-            return
         update_player(standoff_id, "kd", kd_value)
         await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
+
+    # Updating Ranks
     else:
         if rank_value not in RANKS:
             await interaction.response.send_message(f"Invalid rank. Choose from: {', '.join(RANKS)}", ephemeral=True)
