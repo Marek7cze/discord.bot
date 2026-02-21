@@ -142,10 +142,10 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.add_field(name="Allies", value=allies, inline=True)
     embed.add_field(name="Duel", value=duel, inline=True)
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
-    await interaction.response.send_message(embed=embed)
+await interaction.response.send_message(embed=embed)
 
 # -----------------------------
-# Update Command (with dropdown for ranks)
+# Update Command (replace old one)
 # -----------------------------
 @bot.tree.command(name="update", description="Update a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
 @app_commands.checks.has_permissions(manage_roles=True)
@@ -153,25 +153,34 @@ async def update(
     interaction: discord.Interaction,
     standoff_id: str,
     field: app_commands.Choice[str],
-    value: app_commands.Choice[str] = None
+    rank_value: str = None,
+    kd_value: float = None
 ):
+    """Update either a rank or K/D of a player."""
+
     player = get_player(standoff_id)
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
+    # Updating K/D
     if field.value.lower() == "kd":
-        try:
-            kd_value = float(value.value)
-        except:
-            await interaction.response.send_message("K/D must be a number.", ephemeral=True)
+        if kd_value is None:
+            await interaction.response.send_message("You must provide a number for K/D.", ephemeral=True)
+            return
+        if not (0.00 <= kd_value <= 1000.00):
+            await interaction.response.send_message("K/D must be between 0.00 and 1000.00", ephemeral=True)
             return
         update_player(standoff_id, "kd", kd_value)
-        await interaction.response.send_message(f"K/D updated to {kd_value} for {standoff_id}")
-    else:
-        update_player(standoff_id, field.value.lower(), value.value)
-        await interaction.response.send_message(f"{field.value} updated to {value.value} for {standoff_id}")
+        await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
+    # Updating Competitive / Allies / Duel
+    else:
+        if rank_value not in RANKS:
+            await interaction.response.send_message(f"Invalid rank. Choose from: {', '.join(RANKS)}", ephemeral=True)
+            return
+        update_player(standoff_id, field.value.lower(), rank_value)
+        await interaction.response.send_message(f"{field.value} updated to {rank_value} for {standoff_id}")
 # -----------------------------
 # Bot Ready
 # -----------------------------
