@@ -23,8 +23,8 @@ threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
 # -----------------------------
 # Bot Setup
 # -----------------------------
-GUILD_ID = 1247900579586642021
-DAILY_CHANNEL_ID = 1474476859210076294
+GUILD_ID = 1247900579586642021       # Your Discord server ID
+DAILY_CHANNEL_ID = 1474476859210076294  # Channel for daily code
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -65,6 +65,10 @@ def get_player(standoff_id):
     c.execute("SELECT * FROM players WHERE standoff_id = ?", (standoff_id,))
     return c.fetchone()
 
+def get_player_by_discord(discord_id):
+    c.execute("SELECT * FROM players WHERE discord_id = ?", (discord_id,))
+    return c.fetchone()
+
 def update_player(standoff_id, field, value):
     c.execute(f"UPDATE players SET {field} = ? WHERE standoff_id = ?", (value, standoff_id))
     conn.commit()
@@ -93,29 +97,52 @@ async def code(ctx):
     await ctx.send(f"Today's Access Code: `{daily_code}`")
 
 # -----------------------------
-# Stats Slash Commands
+# Register Command
+# -----------------------------
+@bot.tree.command(name="register", description="Register your Standoff 2 account", guild=discord.Object(id=GUILD_ID))
+async def register(interaction: discord.Interaction, standoff_id: str, name: str):
+    existing = get_player(standoff_id)
+    if existing:
+        await interaction.response.send_message(f"Player {standoff_id} is already registered.", ephemeral=True)
+        return
+    add_player(standoff_id, str(interaction.user.id), name)
+    await interaction.response.send_message(f"✅ Registered {name} with Standoff ID {standoff_id}!", ephemeral=True)
+
+# -----------------------------
+# Stats Command
 # -----------------------------
 @bot.tree.command(name="stats", description="View a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
-async def stats(interaction: discord.Interaction, standoff_id: str):
-    player = get_player(standoff_id)
-    if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
+async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
+    if member:
+        player = get_player_by_discord(str(member.id))
+        if not player:
+            await interaction.response.send_message("Player not found for this Discord user.", ephemeral=True)
+            return
+    elif standoff_id:
+        player = get_player(standoff_id)
+        if not player:
+            await interaction.response.send_message("Player not found for this Standoff ID.", ephemeral=True)
+            return
+    else:
+        await interaction.response.send_message("You must provide a Discord user or a Standoff ID.", ephemeral=True)
         return
 
     _, discord_id, name, competitive, allies, duel, kd, comp_img, allies_img, duel_img = player
 
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
-
-    embed.add_field(name="ID", value=standoff_id, inline=False)
-    embed.add_field(name="Competitive", value=f"{competitive}", inline=True)
+    embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
+    embed.add_field(name="Competitive", value=competitive, inline=True)
     embed.set_thumbnail(url=comp_img)
-    embed.add_field(name="Allies", value=f"{allies}", inline=True)
+    embed.add_field(name="Allies", value=allies, inline=True)
     embed.set_image(url=allies_img)
-    embed.add_field(name="Duel", value=f"{duel}", inline=True)
+    embed.add_field(name="Duel", value=duel, inline=True)
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
 
     await interaction.response.send_message(embed=embed)
 
+# -----------------------------
+# Update Command
+# -----------------------------
 @bot.tree.command(name="update", description="Update a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
 @app_commands.checks.has_permissions(manage_roles=True)
 async def update(interaction: discord.Interaction, standoff_id: str, field: str, value: str):
@@ -125,12 +152,10 @@ async def update(interaction: discord.Interaction, standoff_id: str, field: str,
         return
 
     if field.lower() in ["competitive", "allies", "duel"]:
-        # Allow editing text or image URL
+        # Determine if value is an image or rank text
         if value.startswith("http"):
-            # It's an image
             field_name = f"{field.lower()}_image"
         else:
-            # It's rank text
             field_name = field.lower()
     elif field.lower() == "kd":
         field_name = "kd"
@@ -147,7 +172,7 @@ async def update(interaction: discord.Interaction, standoff_id: str, field: str,
     await interaction.response.send_message(f"{field} updated for {standoff_id} to {value}")
 
 # -----------------------------
-# Ready Event
+# Bot Ready
 # -----------------------------
 @bot.event
 async def on_ready():
@@ -157,7 +182,6 @@ async def on_ready():
         print("Slash commands synced!")
     except Exception as e:
         print("Sync error:", e)
-
     bot.loop.create_task(reset_daily_code())
 
 # -----------------------------
@@ -168,54 +192,3 @@ if token:
     bot.run(token)
 else:
     print("DISCORD_TOKEN not set!")
-# -----------------------------
-# Register command
-# -----------------------------
-@bot.tree.command(name="register", description="Register your Standoff 2 account", guild=discord.Object(id=GUILD_ID))
-async def register(interaction: discord.Interaction, standoff_id: str, name: str):
-    # Check if already registered
-    existing = get_player(standoff_id)
-    if existing:
-        await interaction.response.send_message(f"Player {standoff_id} is already registered.", ephemeral=True)
-        return
-
-    # Add player with defaults
-    c.execute("""
-        INSERT INTO players 
-        (standoff_id, discord_id, name, competitive, allies, duel, kd, competitive_image, allies_image, duel_image)
-        VALUES (?, ?, ?, 'RANK EMPTY', 'RANK EMPTY', 'RANK EMPTY', 0.00, 
-                'https://i.imgur.com/mlH9Gt8.png', 
-                'https://i.imgur.com/LPvuDk7.png', 
-                'https://i.imgur.com/Om1vlem.png')
-    """, (standoff_id, str(interaction.user.id), name))
-    conn.commit()
-
-    await interaction.response.send_message(f"✅ Registered {name} with Standoff ID {standoff_id}!", ephemeral=True)
-    @bot.tree.command(name="stats", description="View a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
-async def stats(interaction: discord.Interaction, member: discord.Member = None, standoff_id: str = None):
-    if member:
-        # Look up Standoff ID by Discord ID
-        c.execute("SELECT * FROM players WHERE discord_id = ?", (str(member.id),))
-        player = c.fetchone()
-    elif standoff_id:
-        player = get_player(standoff_id)
-    else:
-        await interaction.response.send_message("You must provide a Discord user or a Standoff ID.", ephemeral=True)
-        return
-
-    if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
-        return
-
-    _, discord_id, name, competitive, allies, duel, kd, comp_img, allies_img, duel_img = player
-
-    embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
-    embed.add_field(name="ID", value=standoff_id if standoff_id else "Unknown", inline=False)
-    embed.add_field(name="Competitive", value=competitive, inline=True)
-    embed.set_thumbnail(url=comp_img)
-    embed.add_field(name="Allies", value=allies, inline=True)
-    embed.set_image(url=allies_img)
-    embed.add_field(name="Duel", value=duel, inline=True)
-    embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
-
-    await interaction.response.send_message(embed=embed)
