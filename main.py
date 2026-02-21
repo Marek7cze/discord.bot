@@ -161,3 +161,38 @@ async def update(
 
     if field.value.lower() == "kd":
         if kd_value is None:
+            await interaction.response.send_message("You must provide a number for K/D.", ephemeral=True)
+            return
+        if not (0.00 <= kd_value <= 1000.00):
+            await interaction.response.send_message("K/D must be between 0.00 and 1000.00", ephemeral=True)
+            return
+        update_player(standoff_id, "kd", kd_value)
+        await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
+    else:
+        if rank_value not in RANKS:
+            await interaction.response.send_message(f"Invalid rank. Choose from: {', '.join(RANKS)}", ephemeral=True)
+            return
+        update_player(standoff_id, field.value.lower(), rank_value)
+        await interaction.response.send_message(f"{field.value} updated to {rank_value} for {standoff_id}")
+
+# -----------------------------
+# Bot Ready
+# -----------------------------
+@bot.event
+async def on_ready():
+    print(f"{bot.user} is online!")
+    try:
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print("Slash commands synced!")
+    except Exception as e:
+        print("Sync error:", e)
+    bot.loop.create_task(reset_daily_code())
+
+# -----------------------------
+# Run Bot
+# -----------------------------
+token = os.getenv("DISCORD_TOKEN")
+if token:
+    bot.run(token)
+else:
+    print("DISCORD_TOKEN not set!")
