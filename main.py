@@ -26,6 +26,5 @@ async def update_daily_code():
     if channel:
         await channel.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
         @bot.event
-async def on_ready():
-    print(f"{bot.user} is online!")
+async def on_ready():print(f"{bot.user} is online!")
     update_daily_code.start()
