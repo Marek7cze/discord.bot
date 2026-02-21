@@ -1,5 +1,18 @@
 import discord
 from discord.ext import commands, tasks
+from flask import Flask
+import threading
+
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Bot is alive!"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+threading.Thread(target=run).start()
 
 intents = discord.Intents.default()
 intents.message_content = True  # REQUIRED for reading message content
