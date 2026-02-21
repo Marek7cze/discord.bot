@@ -19,7 +19,7 @@ def run_flask():
     app.run(host="0.0.0.0", port=8080)
 
 # Start Flask in a separate thread
-threading.Thread(target=run_flask).start()
+threading.Thread(target=run_flask).start(00:00)
 
 # -----------------------------
 # Discord Bot Setup
