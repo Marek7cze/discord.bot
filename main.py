@@ -106,8 +106,7 @@ RANKS = [
 # -----------------------------
 @bot.tree.command(name="register", description="Register your Standoff 2 account", guild=discord.Object(id=GUILD_ID))
 async def register(interaction: discord.Interaction, standoff_id: str, name: str):
-    existing = get_player(standoff_id)
-    if existing:
+    if get_player(standoff_id):
         await interaction.response.send_message(f"Player {standoff_id} is already registered.", ephemeral=True)
         return
     add_player(standoff_id, str(interaction.user.id), name)
@@ -186,10 +185,12 @@ async def update_kd(
 async def on_ready():
     print(f"{bot.user} is online!")
     try:
+        # Force-sync slash commands on startup
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("Slash commands synced!")
+        print("✅ Slash commands synced!")
     except Exception as e:
         print("Sync error:", e)
+    # Start daily code task
     bot.loop.create_task(reset_daily_code())
 
 # -----------------------------
