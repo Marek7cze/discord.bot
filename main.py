@@ -23,7 +23,7 @@ threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
 # -----------------------------
 # Bot Setup
 # -----------------------------
-GUILD_ID = 1247900579586642021  # Your server ID
+GUILD_ID = 1247900579586642021       # Your server ID
 DAILY_CHANNEL_ID = 1474476859210076294  # Daily code channel ID
 
 intents = discord.Intents.default()
@@ -93,12 +93,10 @@ async def code(ctx):
 # Predefined Ranks
 # -----------------------------
 RANKS = [
-    "RANK EMPTY", "Bronze I", "Bronze II", "Bronze III",
-    "Silver I", "Silver II", "Silver III",
-    "Gold I", "Gold II", "Gold III",
-    "Platinum I", "Platinum II", "Platinum III",
-    "Diamond I", "Diamond II", "Diamond III",
-    "Master", "Grandmaster"
+    "Bronze I", "Bronze II", "Bronze III", "Bronze IV",
+    "Silver I", "Silver II", "Silver III", "Silver IV",
+    "Gold I", "Gold II", "Gold III", "Gold IV",
+    "Phoenix", "Ranger", "Champion", "Master", "Elite", "The Legend"
 ]
 
 # -----------------------------
