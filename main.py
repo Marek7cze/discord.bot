@@ -7,6 +7,7 @@ import sqlite3
 import os
 from flask import Flask
 import threading
+import asyncio
 
 # -----------------------------
 # Flask Keep-Alive
@@ -20,7 +21,7 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=8080)
 
-threading.Thread(target=run_flask).start()  # <-- fixed
+threading.Thread(target=run_flask).start()
 
 # -----------------------------
 # Bot Setup
@@ -32,7 +33,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 # -----------------------------
-# Database setup for stats
+# Database setup
 # -----------------------------
 conn = sqlite3.connect("player_stats.db")
 c = conn.cursor()
@@ -64,30 +65,24 @@ def add_player(discord_id, name):
 # Daily Code
 # -----------------------------
 daily_code = random.randint(1000, 9999)
+DAILY_CHANNEL_ID = 1474476859210076294  # Your channel ID
 
-@bot.event
-async def on_ready():
-    print(f"{bot.user} is online!")
-    print(f"Today's code: {daily_code}")
-    update_daily_code.start()
-    try:
-        # Sync slash commands
-        await bot.tree.sync()
-        print("Slash commands synced.")
-    except Exception as e:
-        print("Error syncing commands:", e)
+async def reset_daily_code_at_midnight():
+    global daily_code
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        now = datetime.datetime.now()
+        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        seconds_until_midnight = (next_midnight - now).total_seconds()
+        await asyncio.sleep(seconds_until_midnight)
+        daily_code = random.randint(1000, 9999)
+        channel = bot.get_channel(DAILY_CHANNEL_ID)
+        if channel:
+            await channel.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
 
 @bot.command()
 async def code(ctx):
     await ctx.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
-
-@tasks.loop(hours=24)
-async def update_daily_code():
-    global daily_code
-    daily_code = random.randint(1000, 9999)
-    channel = bot.get_channel(1474476859210076294)
-    if channel:
-        await channel.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
 
 # -----------------------------
 # Stats Cog
@@ -131,6 +126,20 @@ class Stats(commands.Cog):
 bot.add_cog(Stats(bot))
 
 # -----------------------------
+# Bot Ready
+# -----------------------------
+@bot.event
+async def on_ready():
+    print(f"{bot.user} is online!")
+    print(f"Today's code: {daily_code}")
+    try:
+        await bot.tree.sync()
+        print("Slash commands synced.")
+    except Exception as e:
+        print("Error syncing commands:", e)
+    bot.loop.create_task(reset_daily_code_at_midnight())
+
+# -----------------------------
 # Run bot
 # -----------------------------
-bot.run(os.getenv("DISCORD_TOKEN"))  # make sure your token is in env variables
+bot.run(os.getenv("DISCORD_TOKEN"))
