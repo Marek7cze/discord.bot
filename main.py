@@ -23,7 +23,7 @@ threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
 # -----------------------------
 # Bot Setup
 # -----------------------------
-GUILD_ID = 1247900579586642021       # Your Discord server ID
+GUILD_ID = 1247900579586642021       # Your server ID
 DAILY_CHANNEL_ID = 1474476859210076294  # Channel for daily code
 
 intents = discord.Intents.default()
@@ -46,19 +46,14 @@ CREATE TABLE IF NOT EXISTS players (
     competitive TEXT DEFAULT 'RANK EMPTY',
     allies TEXT DEFAULT 'RANK EMPTY',
     duel TEXT DEFAULT 'RANK EMPTY',
-    kd REAL DEFAULT 0.00,
-    competitive_image TEXT DEFAULT 'https://i.imgur.com/mlH9Gt8.png',
-    allies_image TEXT DEFAULT 'https://i.imgur.com/LPvuDk7.png',
-    duel_image TEXT DEFAULT 'https://i.imgur.com/Om1vlem.png'
+    kd REAL DEFAULT 0.00
 )
 """)
 conn.commit()
 
 def add_player(standoff_id, discord_id, name):
-    c.execute("""
-    INSERT OR IGNORE INTO players 
-    (standoff_id, discord_id, name) VALUES (?, ?, ?)
-    """, (standoff_id, discord_id, name))
+    c.execute("INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
+              (standoff_id, discord_id, name))
     conn.commit()
 
 def get_player(standoff_id):
@@ -97,6 +92,18 @@ async def code(ctx):
     await ctx.send(f"Today's Access Code: `{daily_code}`")
 
 # -----------------------------
+# Ranks List
+# -----------------------------
+RANKS = [
+    "RANK EMPTY", "Bronze I", "Bronze II", "Bronze III",
+    "Silver I", "Silver II", "Silver III",
+    "Gold I", "Gold II", "Gold III",
+    "Platinum I", "Platinum II", "Platinum III",
+    "Diamond I", "Diamond II", "Diamond III",
+    "Master", "Grandmaster"
+]
+
+# -----------------------------
 # Register Command
 # -----------------------------
 @bot.tree.command(name="register", description="Register your Standoff 2 account", guild=discord.Object(id=GUILD_ID))
@@ -127,49 +134,43 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
         await interaction.response.send_message("You must provide a Discord user or a Standoff ID.", ephemeral=True)
         return
 
-    _, discord_id, name, competitive, allies, duel, kd, comp_img, allies_img, duel_img = player
+    _, discord_id, name, competitive, allies, duel, kd = player
 
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
     embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
     embed.add_field(name="Competitive", value=competitive, inline=True)
-    embed.set_thumbnail(url=comp_img)
     embed.add_field(name="Allies", value=allies, inline=True)
-    embed.set_image(url=allies_img)
     embed.add_field(name="Duel", value=duel, inline=True)
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
-
     await interaction.response.send_message(embed=embed)
 
 # -----------------------------
-# Update Command
+# Update Command (with dropdown for ranks)
 # -----------------------------
 @bot.tree.command(name="update", description="Update a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
 @app_commands.checks.has_permissions(manage_roles=True)
-async def update(interaction: discord.Interaction, standoff_id: str, field: str, value: str):
+async def update(
+    interaction: discord.Interaction,
+    standoff_id: str,
+    field: app_commands.Choice[str],
+    value: app_commands.Choice[str] = None
+):
     player = get_player(standoff_id)
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
-    if field.lower() in ["competitive", "allies", "duel"]:
-        # Determine if value is an image or rank text
-        if value.startswith("http"):
-            field_name = f"{field.lower()}_image"
-        else:
-            field_name = field.lower()
-    elif field.lower() == "kd":
-        field_name = "kd"
+    if field.value.lower() == "kd":
         try:
-            value = float(value)
+            kd_value = float(value.value)
         except:
             await interaction.response.send_message("K/D must be a number.", ephemeral=True)
             return
+        update_player(standoff_id, "kd", kd_value)
+        await interaction.response.send_message(f"K/D updated to {kd_value} for {standoff_id}")
     else:
-        await interaction.response.send_message("Invalid field. Use: competitive, allies, duel, kd", ephemeral=True)
-        return
-
-    update_player(standoff_id, field_name, value)
-    await interaction.response.send_message(f"{field} updated for {standoff_id} to {value}")
+        update_player(standoff_id, field.value.lower(), value.value)
+        await interaction.response.send_message(f"{field.value} updated to {value.value} for {standoff_id}")
 
 # -----------------------------
 # Bot Ready
@@ -185,7 +186,7 @@ async def on_ready():
     bot.loop.create_task(reset_daily_code())
 
 # -----------------------------
-# Run
+# Run Bot
 # -----------------------------
 token = os.getenv("DISCORD_TOKEN")
 if token:
