@@ -18,10 +18,7 @@ app = Flask("")
 def home():
     return "Bot is alive!"
 
-def run_flask():
-    app.run(host="0.0.0.0", port=8080)
-
-threading.Thread(target=run_flask).start()
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
 
 # -----------------------------
 # Bot Setup
@@ -85,18 +82,18 @@ daily_code = random.randint(1000, 9999)
 async def reset_daily_code_at_midnight():
     global daily_code
     await bot.wait_until_ready()
-    while not bot.is_closed():
+    while True:
         try:
             now = datetime.datetime.now()
             next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            seconds_until_midnight = (next_midnight - now).total_seconds()
-            if seconds_until_midnight < 0:
-                seconds_until_midnight = 1
+            seconds_until_midnight = max(1, (next_midnight - now).total_seconds())
             await asyncio.sleep(seconds_until_midnight)
             daily_code = random.randint(1000, 9999)
             channel = bot.get_channel(DAILY_CHANNEL_ID)
             if channel:
                 await channel.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
+            else:
+                print("Warning: Daily code channel not found")
         except Exception as e:
             print("Error in daily code task:", e)
             await asyncio.sleep(10)
@@ -146,7 +143,7 @@ class Stats(commands.Cog):
 bot.add_cog(Stats(bot))
 
 # -----------------------------
-# Debug slash command check
+# Debug command to check slash commands
 # -----------------------------
 @bot.command()
 async def listcmds(ctx):
@@ -172,6 +169,10 @@ async def on_ready():
     bot.loop.create_task(reset_daily_code_at_midnight())
 
 # -----------------------------
-# Run bot
+# Run bot safely
 # -----------------------------
-bot.run(os.getenv("DISCORD_TOKEN"))
+token = os.getenv("DISCORD_TOKEN")
+if not token:
+    print("Error: DISCORD_TOKEN not set. Bot will not start.")
+else:
+    bot.run(token)
