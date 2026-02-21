@@ -39,7 +39,7 @@ async def on_ready():
 async def code(ctx):
     await ctx.send(
         f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}"
-    )
+    
 
 @tasks.loop(hours=24)
 async def update_daily_code():
@@ -49,8 +49,6 @@ async def update_daily_code():
     if channel:
         await channel.send(
             f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}"
-        )
-
+        
 update_daily_code.start()
-
 bot.run(os.getenv("DISCORD_TOKEN"))
