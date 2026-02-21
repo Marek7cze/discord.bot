@@ -191,3 +191,31 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
     conn.commit()
 
     await interaction.response.send_message(f"✅ Registered {name} with Standoff ID {standoff_id}!", ephemeral=True)
+    @bot.tree.command(name="stats", description="View a player's Standoff 2 stats", guild=discord.Object(id=GUILD_ID))
+async def stats(interaction: discord.Interaction, member: discord.Member = None, standoff_id: str = None):
+    if member:
+        # Look up Standoff ID by Discord ID
+        c.execute("SELECT * FROM players WHERE discord_id = ?", (str(member.id),))
+        player = c.fetchone()
+    elif standoff_id:
+        player = get_player(standoff_id)
+    else:
+        await interaction.response.send_message("You must provide a Discord user or a Standoff ID.", ephemeral=True)
+        return
+
+    if not player:
+        await interaction.response.send_message("Player not found.", ephemeral=True)
+        return
+
+    _, discord_id, name, competitive, allies, duel, kd, comp_img, allies_img, duel_img = player
+
+    embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
+    embed.add_field(name="ID", value=standoff_id if standoff_id else "Unknown", inline=False)
+    embed.add_field(name="Competitive", value=competitive, inline=True)
+    embed.set_thumbnail(url=comp_img)
+    embed.add_field(name="Allies", value=allies, inline=True)
+    embed.set_image(url=allies_img)
+    embed.add_field(name="Duel", value=duel, inline=True)
+    embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
+
+    await interaction.response.send_message(embed=embed)
