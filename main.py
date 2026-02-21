@@ -168,3 +168,26 @@ if token:
     bot.run(token)
 else:
     print("DISCORD_TOKEN not set!")
+# -----------------------------
+# Register command
+# -----------------------------
+@bot.tree.command(name="register", description="Register your Standoff 2 account", guild=discord.Object(id=GUILD_ID))
+async def register(interaction: discord.Interaction, standoff_id: str, name: str):
+    # Check if already registered
+    existing = get_player(standoff_id)
+    if existing:
+        await interaction.response.send_message(f"Player {standoff_id} is already registered.", ephemeral=True)
+        return
+
+    # Add player with defaults
+    c.execute("""
+        INSERT INTO players 
+        (standoff_id, discord_id, name, competitive, allies, duel, kd, competitive_image, allies_image, duel_image)
+        VALUES (?, ?, ?, 'RANK EMPTY', 'RANK EMPTY', 'RANK EMPTY', 0.00, 
+                'https://i.imgur.com/mlH9Gt8.png', 
+                'https://i.imgur.com/LPvuDk7.png', 
+                'https://i.imgur.com/Om1vlem.png')
+    """, (standoff_id, str(interaction.user.id), name))
+    conn.commit()
+
+    await interaction.response.send_message(f"✅ Registered {name} with Standoff ID {standoff_id}!", ephemeral=True)
