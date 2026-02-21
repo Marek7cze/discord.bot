@@ -35,8 +35,8 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 # -----------------------------
 # Server and Channel IDs
 # -----------------------------
-GUILD_ID = 1247900579586642021  # your server
-DAILY_CHANNEL_ID = 1474476859210076294  # channel for daily code
+GUILD_ID = 1247900579586642021       # Your server ID
+DAILY_CHANNEL_ID = 1474476859210076294  # Channel for daily code
 
 # -----------------------------
 # Database setup
@@ -79,6 +79,8 @@ async def reset_daily_code_at_midnight():
         now = datetime.datetime.now()
         next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         seconds_until_midnight = (next_midnight - now).total_seconds()
+        if seconds_until_midnight < 0:
+            seconds_until_midnight = 1  # safety
         await asyncio.sleep(seconds_until_midnight)
         daily_code = random.randint(1000, 9999)
         channel = bot.get_channel(DAILY_CHANNEL_ID)
