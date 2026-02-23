@@ -1,1 +1,1 @@
-# discord.bot
+# Standoff Rank Bot
