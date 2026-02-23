@@ -180,7 +180,10 @@ async def on_ready():
         print("✅ Slash commands synced")
     except Exception as e:
         print("Sync error:", e)
-    bot.loop.create_task(reset_daily_code())
+
+    if not hasattr(bot, "daily_task_started"):
+        bot.loop.create_task(reset_daily_code())
+        bot.daily_task_started = True
 
 # -----------------------------
 # Run Bot
