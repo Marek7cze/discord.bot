@@ -25,8 +25,8 @@ threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
 # -----------------------------
 GUILD_ID = 1247900579586642021       # Your server ID
 DAILY_CHANNEL_ID = 1474476859210076294  # Daily code channel ID
-BUTTON_MESSAGE_CHANNEL_ID = 1369775581469872309  # Channel to send the button in
-TARGET_CHANNEL_ID = 1247912571802222704         # Channel the button links to
+BUTTON_MESSAGE_CHANNEL_ID = 1369775581469872309  # Channel to send the rules button
+TARGET_CHANNEL_ID = 1247912571802222704         # Channel the rules button links to
 LEADERBOARD_CHANNEL_ID = 1474813234795249734   # Channel for leaderboard
 
 intents = discord.Intents.default()
@@ -173,75 +173,75 @@ async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value
     await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
 # -----------------------------
-# Auto-Refresh Button Task
+# Persistent Rules Button
 # -----------------------------
-async def auto_refresh_button():
+async def ensure_rules_button():
     await bot.wait_until_ready()
     channel = bot.get_channel(BUTTON_MESSAGE_CHANNEL_ID)
     if channel is None:
-        print("Button channel not found!")
+        print("Rules channel not found!")
+        return
+
+    # Check last 50 messages to see if button exists
+    button_exists = False
+    async for msg in channel.history(limit=50):
+        if msg.author == bot.user and msg.components:
+            button_exists = True
+            break
+
+    if not button_exists:
+        button_link = f"https://discord.com/channels/{GUILD_ID}/{TARGET_CHANNEL_ID}"
+        button = discord.ui.Button(label="Go to Channel", url=button_link)
+        view = discord.ui.View()
+        view.add_item(button)
+        await channel.send("Read Channel #📜rules", view=view)
+        print("✅ Rules button sent!")
+
+# -----------------------------
+# Auto-Updating Leaderboard Embed
+# -----------------------------
+async def auto_update_leaderboard():
+    await bot.wait_until_ready()
+    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
+    if channel is None:
+        print("Leaderboard channel not found!")
         return
 
     while True:
-        button_exists = False
-        async for msg in channel.history(limit=50):
+        c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
+        players = c.fetchall()
+        if not players:
+            await asyncio.sleep(600)
+            continue
+
+        rank_values = {rank: i for i, rank in enumerate(RANKS)}
+        leaderboard_data = []
+        for name, standoff_id, competitive, allies, duel, kd in players:
+            comp_score = rank_values.get(competitive, 0)
+            allies_score = rank_values.get(allies, 0)
+            duel_score = rank_values.get(duel, 0)
+            total_score = comp_score + allies_score + duel_score + kd
+            leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd, total_score))
+
+        leaderboard_data.sort(key=lambda x: x[6], reverse=True)
+
+        embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
+        for idx, (name, standoff_id, comp, allies_, duel_, kd, score) in enumerate(leaderboard_data[:10], start=1):
+            embed.add_field(
+                name=f"{idx}. {name} ({standoff_id})",
+                value=f"Competitive: {comp} | Allies: {allies_} | Duel: {duel_}\nK/D: {kd:.2f}",
+                inline=False
+            )
+
+        # Delete previous leaderboard messages sent by bot
+        async for msg in channel.history(limit=20):
             if msg.author == bot.user and msg.embeds:
-                button_exists = True
-                break
+                await msg.delete()
 
-        if not button_exists:
-            channel_link = f"https://discord.com/channels/{GUILD_ID}/{TARGET_CHANNEL_ID}"
-            button = discord.ui.Button(label="Go to Channel", url=channel_link)
-            view = discord.ui.View()
-            view.add_item(button)
-            await channel.send("Click the button to go to the channel!", view=view)
-            print("✅ Button message reposted!")
+        await channel.send(embed=embed)
+        print("✅ Leaderboard updated!")
 
-        # Check every 5 minutes
-        await asyncio.sleep(300)
-
-# -----------------------------
-# /leaderboard
-# -----------------------------
-@bot.tree.command(name="leaderboard", description="Show top players leaderboard", guild=discord.Object(id=GUILD_ID))
-async def leaderboard(interaction: discord.Interaction):
-    c.execute("SELECT name, competitive, allies, duel, kd FROM players")
-    players = c.fetchall()
-    
-    if not players:
-        await interaction.response.send_message("No players registered yet.", ephemeral=True)
-        return
-
-    # Map ranks to numeric values
-    rank_values = {rank: i for i, rank in enumerate(RANKS)}
-
-    leaderboard_data = []
-    for name, competitive, allies, duel, kd in players:
-        comp_score = rank_values.get(competitive, 0)
-        allies_score = rank_values.get(allies, 0)
-        duel_score = rank_values.get(duel, 0)
-        total_score = comp_score + allies_score + duel_score + kd  # K/D adds to ranking
-        leaderboard_data.append((name, competitive, allies, duel, kd, total_score))
-
-    # Sort descending by total_score
-    leaderboard_data.sort(key=lambda x: x[5], reverse=True)
-
-    # Prepare embed
-    embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
-    for idx, (name, comp, allies_, duel_, kd, score) in enumerate(leaderboard_data[:10], start=1):
-        embed.add_field(
-            name=f"{idx}. {name}",
-            value=f"Competitive: {comp} | Allies: {allies_} | Duel: {duel_} | K/D: {kd:.2f}",
-            inline=False
-        )
-
-    # Send leaderboard in the dedicated channel
-    leaderboard_channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
-    if leaderboard_channel:
-        await leaderboard_channel.send(embed=embed)
-        await interaction.response.send_message(f"✅ Leaderboard posted in <#{LEADERBOARD_CHANNEL_ID}>", ephemeral=True)
-    else:
-        await interaction.response.send_message("Leaderboard channel not found!", ephemeral=True)
+        await asyncio.sleep(600)  # 10 minutes
 
 # -----------------------------
 # Bot Ready
@@ -259,9 +259,13 @@ async def on_ready():
         bot.loop.create_task(reset_daily_code())
         bot.daily_task_started = True
 
-    if not hasattr(bot, "button_task_started"):
-        bot.loop.create_task(auto_refresh_button())
-        bot.button_task_started = True
+    if not hasattr(bot, "rules_button_started"):
+        bot.loop.create_task(ensure_rules_button())
+        bot.rules_button_started = True
+
+    if not hasattr(bot, "leaderboard_task_started"):
+        bot.loop.create_task(auto_update_leaderboard())
+        bot.leaderboard_task_started = True
 
 # -----------------------------
 # Run Bot
