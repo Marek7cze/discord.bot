@@ -184,7 +184,7 @@ async def update_rank(interaction: discord.Interaction, standoff_id: str, field:
 # -----------------------------
 # Leaderboard task
 # -----------------------------
-@tasks.loop(minutes=10)
+@tasks.loop(minutes=5)
 async def auto_leaderboard():
     await bot.wait_until_ready()
     channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
