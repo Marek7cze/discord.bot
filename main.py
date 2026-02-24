@@ -28,7 +28,7 @@ flask_thread.start()
 # -----------------------------
 # Bot setup
 # -----------------------------
-GUILD_ID = 1247900579586642021  # Replace with your server ID
+GUILD_ID = 1247900579586642021
 DAILY_CHANNEL_ID = 1474476859210076294
 LEADERBOARD_CHANNEL_ID = 1474813234795249734
 
@@ -71,7 +71,7 @@ def update_player(standoff_id, field, value):
     conn.commit()
 
 # -----------------------------
-# Ranks
+# Ranks (for leaderboard only)
 # -----------------------------
 RANKS = [
  "❌ NO RANK",
@@ -155,6 +155,9 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
+# -----------------------------
+# /remove command
+# -----------------------------
 @bot.tree.command(name="remove", description="Remove a player completely")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
@@ -170,10 +173,14 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
+    # Remove from DB
     c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
     conn.commit()
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
 
+# -----------------------------
+# Update KD command
+# -----------------------------
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
 async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value: float):
@@ -187,6 +194,9 @@ async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value
     update_player(standoff_id, "kd", kd_value)
     await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
+# -----------------------------
+# Update rank command (emojis only)
+# -----------------------------
 @bot.tree.command(name="update_rank", description="Update a player's rank")
 @app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank emoji from RANKS")
 async def update_rank(interaction: discord.Interaction, standoff_id: str, field: str, rank_value: str):
@@ -237,11 +247,16 @@ async def auto_leaderboard():
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
+
+    # Proper guild sync
     try:
-        guild = discord.Object(id=GUILD_ID)
-        await bot.tree.clear_commands(guild=guild)   # Remove old commands
-        await bot.tree.sync(guild=guild)            # Sync fresh commands
-        print("✅ Slash commands synced to guild")
+        guild = discord.utils.get(bot.guilds, id=GUILD_ID)
+        if guild is None:
+            print("Guild not found, syncing globally.")
+            await bot.tree.sync()
+        else:
+            await bot.tree.sync(guild=guild)
+            print("✅ Slash commands synced to guild")
     except Exception as e:
         print("Sync error:", e)
 
