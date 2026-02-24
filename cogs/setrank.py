@@ -23,8 +23,6 @@ rank_emojis = {
     "TheLegend": "<:TheLegend:1475886108775546940>"
 }
 
-GUILD_ID = 1247900579586642021
-
 class SetRank(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
