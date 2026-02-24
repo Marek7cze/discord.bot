@@ -2,9 +2,8 @@ import discord
 from discord.ext import commands
 import os
 import asyncio
-import random
 import datetime
-import sqlite3
+import random
 from flask import Flask
 import threading
 
@@ -30,15 +29,15 @@ flask_thread.start()
 GUILD_ID = 1247900579586642021  # Your server ID
 
 intents = discord.Intents.default()
-intents.message_content = True
 intents.members = True
+intents.message_content = True
 
 class MyBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Load all cogs
+        # Load all cogs from cogs/ folder
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py"):
                 try:
@@ -46,6 +45,9 @@ class MyBot(commands.Bot):
                     print(f"✅ Loaded cog {filename}")
                 except Exception as e:
                     print(f"❌ Failed to load {filename}: {e}")
+
+        # Start daily code background task
+        self.loop.create_task(reset_daily_code())
 
 bot = MyBot()
 
@@ -61,6 +63,8 @@ async def on_ready():
 # -----------------------------
 # Database Setup
 # -----------------------------
+import sqlite3
+
 conn = sqlite3.connect("player_stats.db")
 c = conn.cursor()
 c.execute("""
@@ -94,7 +98,7 @@ def update_player(standoff_id, field, value):
     conn.commit()
 
 # -----------------------------
-# Daily Code Cog
+# Daily Code Task
 # -----------------------------
 daily_code = random.randint(1000, 9999)
 
@@ -103,12 +107,14 @@ async def reset_daily_code():
     await bot.wait_until_ready()
     while True:
         now = datetime.datetime.now()
-        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        next_midnight = (now + datetime.timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         sleep_seconds = (next_midnight - now).total_seconds()
         await asyncio.sleep(sleep_seconds)
 
         daily_code = random.randint(1000, 9999)
-        channel = bot.get_channel(1474476859210076294)  # Daily code channel
+        channel = bot.get_channel(1474476859210076294)  # Your daily code channel ID
         if channel:
             await channel.send(f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}")
 
@@ -121,8 +127,6 @@ async def code(ctx):
 # -----------------------------
 token = os.getenv("DISCORD_TOKEN")
 if token:
-    # Start daily code background task
-    bot.loop.create_task(reset_daily_code())
     bot.run(token)
 else:
     print("DISCORD_TOKEN not set!")
