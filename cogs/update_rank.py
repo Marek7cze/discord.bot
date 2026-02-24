@@ -3,7 +3,6 @@ from discord.ext import commands
 from discord import app_commands
 import sqlite3
 
-GUILD_ID = 1247900579586642021
 conn = sqlite3.connect("player_stats.db")
 c = conn.cursor()
 
