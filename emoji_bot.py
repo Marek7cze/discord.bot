@@ -6,9 +6,14 @@ import os
 intents = discord.Intents.default()
 intents.members = True  # Needed to edit nicknames
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+# -----------------------------
+# Bot Setup
+# -----------------------------
+bot = commands.Bot(command_prefix="!", intents=intents)  # command_prefix is irrelevant for slash commands
 
-# ----- Rank Emojis -----
+# -----------------------------
+# Rank Emojis
+# -----------------------------
 rank_emojis = {
     "Bronze1": "<:Bronze1:1475882755664384154>",
     "Bronze2": "<:Bronze2:1475883215154712758>",
@@ -30,14 +35,26 @@ rank_emojis = {
     "TheLegend": "<:TheLegend:1475886108775546940>"
 }
 
-# ----- Server ID -----
-GUILD_ID = 1247900579586642021  # ✅ Your server ID
+# -----------------------------
+# Your Server ID
+# -----------------------------
+GUILD_ID = 1247900579586642021  # ✅ Replace if different
 
-# ----- Slash Command -----
-@bot.tree.command(name="setrank", description="Set a rank emoji to a user", guild=discord.Object(id=GUILD_ID))
-@app_commands.describe(user="The user to change nickname", rank="The rank to assign")
+# -----------------------------
+# Slash Command: /setrank
+# -----------------------------
+@bot.tree.command(
+    name="setrank",
+    description="Set a rank emoji to a user",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(
+    user="The user to change nickname",
+    rank="The rank to assign"
+)
 async def setrank(interaction: discord.Interaction, user: discord.Member, rank: str):
-    rank = rank.capitalize()
+    # Normalize input: allow lowercase
+    rank = rank.replace(" ", "").capitalize()
     if rank not in rank_emojis:
         await interaction.response.send_message(
             f"❌ Rank not found. Available ranks: {', '.join(rank_emojis.keys())}",
@@ -46,20 +63,26 @@ async def setrank(interaction: discord.Interaction, user: discord.Member, rank: 
         return
 
     emoji = rank_emojis[rank]
+
+    # Preserve part of nickname before " | " if already exists
     name_parts = user.display_name.split(" | ")
-    base_name = name_parts[0]  # Keep original nickname
+    base_name = name_parts[0]
     new_nick = f"{base_name} | {emoji}"
 
     try:
         await user.edit(nick=new_nick)
-        await interaction.response.send_message(f"✅ {user.display_name} now has {emoji} for rank {rank}")
+        await interaction.response.send_message(
+            f"✅ {user.display_name} now has {emoji} for rank {rank}"
+        )
     except discord.Forbidden:
         await interaction.response.send_message(
             "❌ Cannot change nickname. Make sure my role is above theirs and I have Manage Nicknames permission.",
             ephemeral=True
         )
 
-# ----- Bot Ready -----
+# -----------------------------
+# Bot Ready
+# -----------------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
@@ -69,7 +92,9 @@ async def on_ready():
     except Exception as e:
         print("Sync error:", e)
 
-# ----- Run Bot -----
+# -----------------------------
+# Run Bot
+# -----------------------------
 token = os.getenv("DISCORD_TOKEN")
 if token:
     bot.run(token)
