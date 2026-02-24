@@ -1,24 +1,46 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import sqlite3
 import os
 import asyncio
+import sqlite3
+import random
+import datetime
+from flask import Flask
+import threading
+
+# -----------------------------
+# Flask Keep-Alive
+# -----------------------------
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Bot is alive!"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080, use_reloader=False)
+
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
 
 # -----------------------------
 # Bot setup
 # -----------------------------
-GUILD_ID = 1247900579586642021  # Replace with your server ID
-LEADERBOARD_CHANNEL_ID = 1474813234795249734  # Replace with your leaderboard channel
+GUILD_ID = 1247900579586642021
+DAILY_CHANNEL_ID = 1474476859210076294
+LEADERBOARD_CHANNEL_ID = 1474813234795249734
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -----------------------------
-# Database setup
+# Database setup (persistent)
 # -----------------------------
-conn = sqlite3.connect("player_stats.db")
+DB_PATH = os.getenv("DB_PATH", "player_stats.db")
+conn = sqlite3.connect(DB_PATH)
 c = conn.cursor()
+
 c.execute("""
 CREATE TABLE IF NOT EXISTS players (
     standoff_id TEXT PRIMARY KEY,
@@ -32,6 +54,11 @@ CREATE TABLE IF NOT EXISTS players (
 """)
 conn.commit()
 
+def add_player(standoff_id, discord_id, name):
+    c.execute("INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
+              (standoff_id, discord_id, name))
+    conn.commit()
+
 def get_player(standoff_id):
     c.execute("SELECT * FROM players WHERE standoff_id = ?", (standoff_id,))
     return c.fetchone()
@@ -40,51 +67,31 @@ def get_player_by_discord(discord_id):
     c.execute("SELECT * FROM players WHERE discord_id = ?", (discord_id,))
     return c.fetchone()
 
+def update_player(standoff_id, field, value):
+    c.execute(f"UPDATE players SET {field} = ? WHERE standoff_id = ?", (value, standoff_id))
+    conn.commit()
+
 def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
     conn.commit()
 
 # -----------------------------
-# Leaderboard update
+# Daily code
 # -----------------------------
-RANKS = [
- "❌ NO RANK", "🟫 Bronze I", "🟫 Bronze II", "🟫 Bronze III", "🟫 Bronze IV",
- "⬜ Silver I", "⬜ Silver II", "⬜ Silver III", "⬜ Silver IV",
- "🟨 Gold I", "🟨 Gold II", "🟨 Gold III", "🟨 Gold IV",
- "🔥 Phoenix", "🏹 Ranger", "🏆 Champion", "👑 Master", "💎 Elite", "🌟 The Legend"
-]
+daily_code = random.randint(1000, 9999)
 
-@tasks.loop(minutes=5)
-async def auto_leaderboard():
+async def reset_daily_code():
+    global daily_code
     await bot.wait_until_ready()
-    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
-    if not channel:
-        return
-    c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
-    players = c.fetchall()
-    if not players:
-        return
-
-    rank_values = {rank: i for i, rank in enumerate(RANKS)}
-    leaderboard_data = []
-    for name, standoff_id, competitive, allies, duel, kd in players:
-        comp_score = rank_values.get(competitive, 0)
-        allies_score = rank_values.get(allies, 0)
-        duel_score = rank_values.get(duel, 0)
-        total_score = comp_score + allies_score + duel_score + kd
-        leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd, total_score))
-
-    leaderboard_data.sort(key=lambda x: x[6], reverse=True)
-    embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
-    for idx, (name, standoff_id, comp, allies_, duel_, kd, score) in enumerate(leaderboard_data[:10], start=1):
-        embed.add_field(name=f"{idx}. {name} ({standoff_id})",
-                        value=f"Competitive: {comp} | Allies: {allies_} | Duel: {duel_}\nK/D: {kd:.2f}",
-                        inline=False)
-    # Delete previous leaderboard messages sent by bot
-    async for msg in channel.history(limit=20):
-        if msg.author == bot.user and msg.embeds:
-            await msg.delete()
-    await channel.send(embed=embed)
+    while True:
+        now = datetime.datetime.now()
+        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        sleep_seconds = (next_midnight - now).total_seconds()
+        await asyncio.sleep(sleep_seconds)
+        daily_code = random.randint(1000, 9999)
+        channel = bot.get_channel(DAILY_CHANNEL_ID)
+        if channel:
+            await channel.send(f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}")
 
 # -----------------------------
 # Slash commands
@@ -107,8 +114,40 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
     remove_player(player[0])
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
 
-    # Update leaderboard immediately after removal
-    await auto_leaderboard()
+# -----------------------------
+# Leaderboard task
+# -----------------------------
+@tasks.loop(minutes=5)
+async def auto_leaderboard():
+    await bot.wait_until_ready()
+    channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
+    if not channel:
+        return
+
+    c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
+    players = c.fetchall()
+    if not players:
+        return
+
+    # Simple leaderboard score: sum of ranks (you can adjust)
+    leaderboard_data = []
+    for name, standoff_id, competitive, allies, duel, kd in players:
+        leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd))
+
+    embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
+    for idx, (name, standoff_id, comp, allies_, duel_, kd) in enumerate(leaderboard_data[:10], start=1):
+        embed.add_field(
+            name=f"{idx}. {name} ({standoff_id})",
+            value=f"Competitive: {comp} | Allies: {allies_} | Duel: {duel_}\nK/D: {kd:.2f}",
+            inline=False
+        )
+
+    # Delete old leaderboard messages
+    async for msg in channel.history(limit=20):
+        if msg.author == bot.user and msg.embeds:
+            await msg.delete()
+
+    await channel.send(embed=embed)
 
 # -----------------------------
 # Bot ready
@@ -117,14 +156,13 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
 async def on_ready():
     print(f"{bot.user} is online!")
     try:
-        guild_obj = discord.Object(id=GUILD_ID)
-        await bot.tree.sync(guild=guild_obj)
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print("✅ Slash commands synced")
     except Exception as e:
         print("Sync error:", e)
-
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
+    bot.loop.create_task(reset_daily_code())
 
 # -----------------------------
 # Run bot
