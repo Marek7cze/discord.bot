@@ -21,9 +21,7 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=8080, use_reloader=False)
 
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
+threading.Thread(target=run_flask, daemon=True).start()
 
 # -----------------------------
 # Bot setup
@@ -71,28 +69,28 @@ def update_player(standoff_id, field, value):
     conn.commit()
 
 # -----------------------------
-# Ranks (emojis only)
+# Ranks
 # -----------------------------
 RANKS = [
-    "❌ NO RANK",
-    "<:Bronze1:1475882755664384154>",
-    "<:Bronze2:1475883215154712758>",
-    "<:Bronze3:1475882893804044402>",
-    "<:Bronze4:1475882954831167508>",
-    "<:Silver1:1475887681454997739>",
-    "<:Silver2:1475885246292430901>",
-    "<:Silver3:1475885332128993342>",
-    "<:Silver4:1475885397157478540>",
-    "<:Gold1:1475887285202583605>",
-    "<:Gold2:1475887345877389435>",
-    "<:Gold3:1475887439456243815>",
-    "<:Gold4:1475887516816248852>",
-    "<:Phoenix:1475885669271474328>",
-    "<:Ranger:1475885739811278969>",
-    "<:Champion:1475887737050763326>",
-    "<:Master:1475885935416705284>",
-    "<:Elite:1475886033878122538>",
-    "<:TheLegend:1475886108775546940>"
+ "❌ NO RANK",
+ "<:Bronze1:1475882755664384154>",
+ "<:Bronze2:1475883215154712758>",
+ "<:Bronze3:1475882893804044402>",
+ "<:Bronze4:1475882954831167508>",
+ "<:Silver1:1475887681454997739>",
+ "<:Silver2:1475885246292430901>",
+ "<:Silver3:1475885332128993342>",
+ "<:Silver4:1475885397157478540>",
+ "<:Gold1:1475887285202583605>",
+ "<:Gold2:1475887345877389435>",
+ "<:Gold3:1475887439456243815>",
+ "<:Gold4:1475887516816248852>",
+ "<:Phoenix:1475885669271474328>",
+ "<:Ranger:1475885739811278969>",
+ "<:Champion:1475887737050763326>",
+ "<:Master:1475885935416705284>",
+ "<:Elite:1475886033878122538>",
+ "<:TheLegend:1475886108775546940>"
 ]
 
 # -----------------------------
@@ -105,11 +103,8 @@ async def reset_daily_code():
     await bot.wait_until_ready()
     while True:
         now = datetime.datetime.now()
-        next_midnight = (now + datetime.timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        sleep_seconds = (next_midnight - now).total_seconds()
-        await asyncio.sleep(sleep_seconds)
+        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        await asyncio.sleep((next_midnight - now).total_seconds())
         daily_code = random.randint(1000, 9999)
         channel = bot.get_channel(DAILY_CHANNEL_ID)
         if channel:
@@ -155,6 +150,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
+# --- REMOVE command ---
 @bot.tree.command(name="remove", description="Remove a player completely")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
@@ -170,10 +166,13 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
+    # Delete from database
     c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
     conn.commit()
+
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
 
+# --- UPDATE KD ---
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
 async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value: float):
@@ -187,6 +186,7 @@ async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value
     update_player(standoff_id, "kd", kd_value)
     await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
+# --- UPDATE RANK ---
 @bot.tree.command(name="update_rank", description="Update a player's rank")
 @app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank emoji from RANKS")
 async def update_rank(interaction: discord.Interaction, standoff_id: str, field: str, rank_value: str):
@@ -194,7 +194,7 @@ async def update_rank(interaction: discord.Interaction, standoff_id: str, field:
         await interaction.response.send_message("Field must be: competitive, allies, duel", ephemeral=True)
         return
     if rank_value not in RANKS:
-        await interaction.response.send_message(f"Rank must be one of the RANKS emojis.", ephemeral=True)
+        await interaction.response.send_message("Rank must be one of the RANKS emojis.", ephemeral=True)
         return
     update_player(standoff_id, field.lower(), rank_value)
     await interaction.response.send_message(f"{field.capitalize()} updated to {rank_value} for {standoff_id}")
@@ -238,12 +238,15 @@ async def auto_leaderboard():
 async def on_ready():
     print(f"{bot.user} is online!")
     try:
-        # If you want guild-specific commands, replace GUILD_ID with your actual ID
-        guild = discord.Object(id=GUILD_ID)
-        await bot.tree.sync(guild=guild)
+        # Sync commands to the guild (instant registration)
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print("✅ Slash commands synced")
     except Exception as e:
-        print("Error syncing commands:", e)
+        print("Sync error:", e)
+    if not auto_leaderboard.is_running():
+        auto_leaderboard.start()
+    bot.loop.create_task(reset_daily_code())
+
 # -----------------------------
 # Run bot
 # -----------------------------
