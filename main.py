@@ -1,13 +1,44 @@
 import discord
 from discord.ext import commands
 import os
+import asyncio
+import random
+import datetime
+import sqlite3
+from flask import Flask
+import threading
+
+# -----------------------------
+# Flask Keep-Alive (SAFE)
+# -----------------------------
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Bot is alive!"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080, use_reloader=False)
+
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
+
+# -----------------------------
+# Bot Setup
+# -----------------------------
+GUILD_ID = 1247900579586642021  # Your server ID
 
 intents = discord.Intents.default()
-intents.members = True
 intents.message_content = True
+intents.members = True
 
 class MyBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix="!", intents=intents)
+
     async def setup_hook(self):
+        # Load all cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py"):
                 try:
@@ -16,10 +47,82 @@ class MyBot(commands.Bot):
                 except Exception as e:
                     print(f"❌ Failed to load {filename}: {e}")
 
-bot = MyBot(command_prefix="!", intents=intents)
+bot = MyBot()
 
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
+    try:
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print("✅ Slash commands synced")
+    except Exception as e:
+        print(f"❌ Sync error: {e}")
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+# -----------------------------
+# Database Setup
+# -----------------------------
+conn = sqlite3.connect("player_stats.db")
+c = conn.cursor()
+c.execute("""
+CREATE TABLE IF NOT EXISTS players (
+    standoff_id TEXT PRIMARY KEY,
+    discord_id TEXT,
+    name TEXT,
+    competitive TEXT DEFAULT 'RANK EMPTY',
+    allies TEXT DEFAULT 'RANK EMPTY',
+    duel TEXT DEFAULT 'RANK EMPTY',
+    kd REAL DEFAULT 0.00
+)
+""")
+conn.commit()
+
+def add_player(standoff_id, discord_id, name):
+    c.execute("INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
+              (standoff_id, discord_id, name))
+    conn.commit()
+
+def get_player(standoff_id):
+    c.execute("SELECT * FROM players WHERE standoff_id = ?", (standoff_id,))
+    return c.fetchone()
+
+def get_player_by_discord(discord_id):
+    c.execute("SELECT * FROM players WHERE discord_id = ?", (discord_id,))
+    return c.fetchone()
+
+def update_player(standoff_id, field, value):
+    c.execute(f"UPDATE players SET {field} = ? WHERE standoff_id = ?", (value, standoff_id))
+    conn.commit()
+
+# -----------------------------
+# Daily Code Cog
+# -----------------------------
+daily_code = random.randint(1000, 9999)
+
+async def reset_daily_code():
+    global daily_code
+    await bot.wait_until_ready()
+    while True:
+        now = datetime.datetime.now()
+        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        sleep_seconds = (next_midnight - now).total_seconds()
+        await asyncio.sleep(sleep_seconds)
+
+        daily_code = random.randint(1000, 9999)
+        channel = bot.get_channel(1474476859210076294)  # Daily code channel
+        if channel:
+            await channel.send(f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}")
+
+@bot.command()
+async def code(ctx):
+    await ctx.send(f"Today's Access Code: `{daily_code}`")
+
+# -----------------------------
+# Run the bot
+# -----------------------------
+token = os.getenv("DISCORD_TOKEN")
+if token:
+    # Start daily code background task
+    bot.loop.create_task(reset_daily_code())
+    bot.run(token)
+else:
+    print("DISCORD_TOKEN not set!")
