@@ -45,9 +45,9 @@ CREATE TABLE IF NOT EXISTS players (
     standoff_id TEXT PRIMARY KEY,
     discord_id TEXT,
     name TEXT,
-    competitive TEXT DEFAULT 'RANK EMPTY',
-    allies TEXT DEFAULT 'RANK EMPTY',
-    duel TEXT DEFAULT 'RANK EMPTY',
+    competitive TEXT DEFAULT '❌ NO RANK',
+    allies TEXT DEFAULT '❌ NO RANK',
+    duel TEXT DEFAULT '❌ NO RANK',
     kd REAL DEFAULT 0.00
 )
 """)
@@ -92,8 +92,8 @@ RANKS = [
  "<:Champion:1475887737050763326>",
  "<:Master:1475885935416705284>",
  "<:Elite:1475886033878122538>",
- "<:TheLegend:1475886108775546940>" ]
-
+ "<:TheLegend:1475886108775546940>"
+]
 
 # -----------------------------
 # Daily code
@@ -136,17 +136,16 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
 async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
     if member:
         player = get_player_by_discord(str(member.id))
-        if not player:
-            await interaction.response.send_message("Player not found for this Discord user.", ephemeral=True)
-            return
     elif standoff_id:
         player = get_player(standoff_id)
-        if not player:
-            await interaction.response.send_message("Player not found for this Standoff ID.", ephemeral=True)
-            return
     else:
         await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
         return
+
+    if not player:
+        await interaction.response.send_message("Player not found.", ephemeral=True)
+        return
+
     _, discord_id, name, competitive, allies, duel, kd = player
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
     embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
@@ -156,8 +155,24 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="remove", description="Remove a player completely")
+@app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
+async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
+    if member:
+        player = get_player_by_discord(str(member.id))
+    elif standoff_id:
+        player = get_player(standoff_id)
+    else:
+        await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
+        return
 
-        
+    if not player:
+        await interaction.response.send_message("Player not found.", ephemeral=True)
+        return
+
+    c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
+    conn.commit()
+    await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
 
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
@@ -173,10 +188,13 @@ async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value
     await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
 @bot.tree.command(name="update_rank", description="Update a player's rank")
-@app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank to assign")
+@app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank emoji from RANKS")
 async def update_rank(interaction: discord.Interaction, standoff_id: str, field: str, rank_value: str):
     if field.lower() not in ["competitive", "allies", "duel"]:
         await interaction.response.send_message("Field must be: competitive, allies, duel", ephemeral=True)
+        return
+    if rank_value not in RANKS:
+        await interaction.response.send_message(f"Rank must be one of the RANKS emojis.", ephemeral=True)
         return
     update_player(standoff_id, field.lower(), rank_value)
     await interaction.response.send_message(f"{field.capitalize()} updated to {rank_value} for {standoff_id}")
