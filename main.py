@@ -71,28 +71,28 @@ def update_player(standoff_id, field, value):
     conn.commit()
 
 # -----------------------------
-# Ranks
+# Ranks (emojis only)
 # -----------------------------
 RANKS = [
- "❌ NO RANK",
- "<:Bronze1:1475882755664384154>",
- "<:Bronze2:1475883215154712758>",
- "<:Bronze3:1475882893804044402>",
- "<:Bronze4:1475882954831167508>",
- "<:Silver1:1475887681454997739>",
- "<:Silver2:1475885246292430901>",
- "<:Silver3:1475885332128993342>",
- "<:Silver4:1475885397157478540>",
- "<:Gold1:1475887285202583605>",
- "<:Gold2:1475887345877389435>",
- "<:Gold3:1475887439456243815>",
- "<:Gold4:1475887516816248852>",
- "<:Phoenix:1475885669271474328>",
- "<:Ranger:1475885739811278969>",
- "<:Champion:1475887737050763326>",
- "<:Master:1475885935416705284>",
- "<:Elite:1475886033878122538>",
- "<:TheLegend:1475886108775546940>"
+    "❌ NO RANK",
+    "<:Bronze1:1475882755664384154>",
+    "<:Bronze2:1475883215154712758>",
+    "<:Bronze3:1475882893804044402>",
+    "<:Bronze4:1475882954831167508>",
+    "<:Silver1:1475887681454997739>",
+    "<:Silver2:1475885246292430901>",
+    "<:Silver3:1475885332128993342>",
+    "<:Silver4:1475885397157478540>",
+    "<:Gold1:1475887285202583605>",
+    "<:Gold2:1475887345877389435>",
+    "<:Gold3:1475887439456243815>",
+    "<:Gold4:1475887516816248852>",
+    "<:Phoenix:1475885669271474328>",
+    "<:Ranger:1475885739811278969>",
+    "<:Champion:1475887737050763326>",
+    "<:Master:1475885935416705284>",
+    "<:Elite:1475886033878122538>",
+    "<:TheLegend:1475886108775546940>"
 ]
 
 # -----------------------------
@@ -170,7 +170,6 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
-    # Delete from database
     c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
     conn.commit()
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
@@ -237,14 +236,13 @@ async def auto_leaderboard():
 # -----------------------------
 @bot.event
 async def on_ready():
+    await bot.wait_until_ready()
     print(f"{bot.user} is online!")
     try:
-        guild_obj = discord.Object(id=GUILD_ID)
-        await bot.tree.clear_commands(guild=guild_obj)
-        await bot.tree.sync(guild=guild_obj)
-        print("✅ Commands cleared and synced")
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print("✅ Commands synced successfully")
     except Exception as e:
-        print("Error clearing/syncing commands:", e)
+        print("Error syncing commands:", e)
 
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
