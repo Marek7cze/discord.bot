@@ -145,9 +145,11 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     else:
         await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
         return
+
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
+
     _, discord_id, name, competitive, allies, duel, kd = player
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
     embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
@@ -157,7 +159,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="remove", description="Remove a player completely")
+@bot.tree.command(name="remove", description="Remove a player completely (clears stats & leaderboard)")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
     if member:
@@ -167,12 +169,13 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
     else:
         await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
         return
+
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
+
     remove_player(player[0])
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
-    await update_leaderboard()  # Update leaderboard immediately
 
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
@@ -200,9 +203,11 @@ async def update_rank(interaction: discord.Interaction, standoff_id: str, field:
     await interaction.response.send_message(f"{field.capitalize()} updated to {rank_value} for {standoff_id}")
 
 # -----------------------------
-# Leaderboard
+# Leaderboard task
 # -----------------------------
-async def update_leaderboard():
+@tasks.loop(minutes=5)
+async def auto_leaderboard():
+    await bot.wait_until_ready()
     channel = bot.get_channel(LEADERBOARD_CHANNEL_ID)
     if not channel:
         return
@@ -229,21 +234,16 @@ async def update_leaderboard():
             await msg.delete()
     await channel.send(embed=embed)
 
-@tasks.loop(minutes=5)
-async def auto_leaderboard():
-    await update_leaderboard()
-
 # -----------------------------
 # Bot ready
 # -----------------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
-    try:
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("✅ Slash commands synced")
-    except Exception as e:
-        print("Sync error:", e)
+    # Clear removed commands to ensure old /setrank disappears
+    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+    print("✅ Slash commands synced")
+
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
     bot.loop.create_task(reset_daily_code())
