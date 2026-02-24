@@ -216,19 +216,25 @@ async def auto_leaderboard():
 async def on_ready():
     print(f"{bot.user} is online!")
 
-    # Clear old commands to remove /setrank
-    guild = discord.Object(id=GUILD_ID)
-    await bot.tree.clear_commands(guild=guild)
-    print("✅ Cleared old slash commands")
+    # Make sure we have a valid Guild object
+    try:
+        guild = bot.get_guild(GUILD_ID)
+        if guild:
+            # Clear old commands for that guild only
+            await bot.tree.clear_commands(guild=guild)
+            print("✅ Cleared old slash commands")
 
-    # Sync current commands
-    await bot.tree.sync(guild=guild)
-    print("✅ Slash commands synced")
+            # Sync new commands
+            await bot.tree.sync(guild=guild)
+            print("✅ Slash commands synced")
+        else:
+            print(f"⚠️ Guild {GUILD_ID} not found, skipping command clear/sync")
+    except Exception as e:
+        print("Error during command clear/sync:", e)
 
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
     bot.loop.create_task(reset_daily_code())
-
 # -----------------------------
 # Run bot
 # -----------------------------
