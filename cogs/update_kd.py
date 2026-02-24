@@ -4,7 +4,6 @@ from discord import app_commands
 import sqlite3
 
 GUILD_ID = 1247900579586642021
-
 conn = sqlite3.connect("player_stats.db")
 c = conn.cursor()
 
@@ -20,13 +19,8 @@ class UpdateKD(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="update_kd",
-        description="Update a player's K/D"
-    )
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="K/D value")
-    @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.command(name="update_kd", description="Update a player's K/D")
+    @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
     async def update_kd(self, interaction: discord.Interaction, standoff_id: str, kd_value: float):
         if not 0.0 <= kd_value <= 1000.0:
             await interaction.response.send_message("K/D must be between 0.00 and 1000.00", ephemeral=True)
