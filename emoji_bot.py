@@ -1,12 +1,14 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import os
 
 intents = discord.Intents.default()
-intents.members = True
+intents.members = True  # Needed to edit nicknames
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ----- Rank Emojis -----
 rank_emojis = {
     "Bronze1": "<:Bronze1:1475882755664384154>",
     "Bronze2": "<:Bronze2:1475883215154712758>",
@@ -28,6 +30,48 @@ rank_emojis = {
     "TheLegend": "<:TheLegend:1475886108775546940>"
 }
 
-@bot.command()
-async def rank(ctx, rank_name: str):
-    rank
+# ----- Server ID -----
+GUILD_ID = 1247900579586642021  # ✅ Your server ID
+
+# ----- Slash Command -----
+@bot.tree.command(name="setrank", description="Set a rank emoji to a user", guild=discord.Object(id=GUILD_ID))
+@app_commands.describe(user="The user to change nickname", rank="The rank to assign")
+async def setrank(interaction: discord.Interaction, user: discord.Member, rank: str):
+    rank = rank.capitalize()
+    if rank not in rank_emojis:
+        await interaction.response.send_message(
+            f"❌ Rank not found. Available ranks: {', '.join(rank_emojis.keys())}",
+            ephemeral=True
+        )
+        return
+
+    emoji = rank_emojis[rank]
+    name_parts = user.display_name.split(" | ")
+    base_name = name_parts[0]  # Keep original nickname
+    new_nick = f"{base_name} | {emoji}"
+
+    try:
+        await user.edit(nick=new_nick)
+        await interaction.response.send_message(f"✅ {user.display_name} now has {emoji} for rank {rank}")
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            "❌ Cannot change nickname. Make sure my role is above theirs and I have Manage Nicknames permission.",
+            ephemeral=True
+        )
+
+# ----- Bot Ready -----
+@bot.event
+async def on_ready():
+    print(f"{bot.user} is online!")
+    try:
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print("✅ Slash commands synced")
+    except Exception as e:
+        print("Sync error:", e)
+
+# ----- Run Bot -----
+token = os.getenv("DISCORD_TOKEN")
+if token:
+    bot.run(token)
+else:
+    print("DISCORD_TOKEN not set!")
