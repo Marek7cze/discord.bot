@@ -236,18 +236,14 @@ async def auto_leaderboard():
 # -----------------------------
 @bot.event
 async def on_ready():
-    await bot.wait_until_ready()
     print(f"{bot.user} is online!")
     try:
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("✅ Commands synced successfully")
+        # If you want guild-specific commands, replace GUILD_ID with your actual ID
+        guild = discord.Object(id=GUILD_ID)
+        await bot.tree.sync(guild=guild)
+        print("✅ Slash commands synced")
     except Exception as e:
         print("Error syncing commands:", e)
-
-    if not auto_leaderboard.is_running():
-        auto_leaderboard.start()
-    bot.loop.create_task(reset_daily_code())
-
 # -----------------------------
 # Run bot
 # -----------------------------
