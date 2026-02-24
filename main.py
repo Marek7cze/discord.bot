@@ -118,9 +118,6 @@ async def reset_daily_code():
         if channel:
             await channel.send(f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}")
 
-@bot.command()
-async def code(ctx):
-    await ctx.send(f"Today's Access Code: `{daily_code}`")
 
 # -----------------------------
 # Run the bot
