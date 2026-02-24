@@ -4,7 +4,6 @@ from discord import app_commands
 import sqlite3
 
 GUILD_ID = 1247900579586642021
-
 conn = sqlite3.connect("player_stats.db")
 c = conn.cursor()
 
@@ -20,12 +19,8 @@ class Stats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="stats",
-        description="View a player's stats"
-    )
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord user")
+    @app_commands.command(name="stats", description="View a player's stats")
+    @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
     async def stats(self, interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
         if member:
             player = get_player_by_discord(str(member.id))
