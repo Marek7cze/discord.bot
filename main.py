@@ -10,7 +10,7 @@ from flask import Flask
 import threading
 
 # -----------------------------
-# Flask Keep-Alive
+# Flask Keep-Alive (SAFE)
 # -----------------------------
 app = Flask("")
 
@@ -18,7 +18,12 @@ app = Flask("")
 def home():
     return "Bot is alive!"
 
-threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
+def run_flask():
+    app.run(host="0.0.0.0", port=8080, use_reloader=False)
+
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
 
 # -----------------------------
 # Bot Setup
@@ -79,15 +84,23 @@ daily_code = random.randint(1000, 9999)
 async def reset_daily_code():
     global daily_code
     await bot.wait_until_ready()
+
     while True:
         now = datetime.datetime.now()
-        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        await asyncio.sleep((next_midnight - now).total_seconds())
+        next_midnight = (now + datetime.timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+        sleep_seconds = (next_midnight - now).total_seconds()
+        await asyncio.sleep(sleep_seconds)
+
         daily_code = random.randint(1000, 9999)
+
         channel = bot.get_channel(DAILY_CHANNEL_ID)
         if channel:
-            await channel.send(f"Today's Access Code: `{daily_code}`\nDate: {datetime.date.today()}")
-
+            await channel.send(
+                f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}"
+            )
 @bot.command()
 async def code(ctx):
     await ctx.send(f"Today's Access Code: `{daily_code}`")
@@ -245,27 +258,20 @@ async def auto_update_leaderboard():
 
 # -----------------------------
 # Bot Ready
-# -----------------------------
+# ------------------------
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
+
     try:
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print("✅ Slash commands synced")
     except Exception as e:
         print("Sync error:", e)
 
-    if not hasattr(bot, "daily_task_started"):
-        bot.loop.create_task(reset_daily_code())
-        bot.daily_task_started = True
-
-    if not hasattr(bot, "rules_button_started"):
-        bot.loop.create_task(ensure_rules_button())
-        bot.rules_button_started = True
-
-    if not hasattr(bot, "leaderboard_task_started"):
-        bot.loop.create_task(auto_update_leaderboard())
-        bot.leaderboard_task_started = True
+    # START DAILY TASK ONLY ONCE
+    if not hasattr(bot, "daily_task"):
+        bot.daily_task = bot.loop.create_task(reset_daily_code())
 
 # -----------------------------
 # Run Bot
