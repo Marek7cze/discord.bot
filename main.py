@@ -134,13 +134,11 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
 @bot.tree.command(name="stats", description="View a player's stats")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
+    player = None
     if member:
         player = get_player_by_discord(str(member.id))
     elif standoff_id:
         player = get_player(standoff_id)
-    else:
-        await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
-        return
 
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
@@ -158,13 +156,11 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
 @bot.tree.command(name="remove", description="Remove a player completely")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
+    player = None
     if member:
         player = get_player_by_discord(str(member.id))
     elif standoff_id:
         player = get_player(standoff_id)
-    else:
-        await interaction.response.send_message("Provide a Discord user or a Standoff ID.", ephemeral=True)
-        return
 
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
@@ -238,6 +234,8 @@ async def auto_leaderboard():
 async def on_ready():
     print(f"{bot.user} is online!")
     try:
+        # Clear old commands and force guild-sync to see /remove instantly
+        await bot.tree.clear_commands(guild=discord.Object(id=GUILD_ID))
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print("✅ Slash commands synced")
     except Exception as e:
