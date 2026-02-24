@@ -283,14 +283,16 @@ rank_emojis = {
     description="Set a rank emoji to a user",
     guild=discord.Object(id=GUILD_ID)
 )
-@app_commands.describe(
-    user="The user to change nickname",
-    rank="The rank to assign"
-)
+@app_commands.describe(user="User", rank="Rank name")
 async def setrank(interaction: discord.Interaction, user: discord.Member, rank: str):
+
+    # Respond immediately to prevent timeout
+    await interaction.response.defer(ephemeral=True)
+
     rank_key = rank.replace(" ", "").capitalize()
+
     if rank_key not in rank_emojis:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"❌ Rank not found. Available: {', '.join(rank_emojis.keys())}",
             ephemeral=True
         )
@@ -298,20 +300,21 @@ async def setrank(interaction: discord.Interaction, user: discord.Member, rank: 
 
     emoji = rank_emojis[rank_key]
 
-    # Preserve base name before any previous rank
     name_parts = user.display_name.split(" | ")
     base_name = name_parts[0]
     new_nick = f"{base_name} | {emoji}"
 
     try:
         await user.edit(nick=new_nick)
-        await interaction.response.send_message(f"✅ {user.display_name} now has {emoji}")
-    except discord.Forbidden:
-        await interaction.response.send_message(
-            "❌ Cannot change nickname. Make sure my role is above theirs and I have Manage Nicknames permission.",
+        await interaction.followup.send(
+            f"✅ {user.display_name} now has {emoji}",
             ephemeral=True
         )
-
+    except Exception as e:
+        await interaction.followup.send(
+            f"❌ Error: {e}",
+            ephemeral=True
+        )
 # -----------------------------
 # Bot Ready
 # ------------------------
