@@ -1,14 +1,12 @@
-# emoji_bot/emoji_rank_bot.py
 import discord
 from discord.ext import commands
 import os
 
 intents = discord.Intents.default()
-intents.members = True  # Needed to edit nicknames
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Mapping of rank names to your Discord emoji IDs
 rank_emojis = {
     "Bronze1": "<:Bronze1:1475882755664384154>",
     "Bronze2": "<:Bronze2:1475883215154712758>",
@@ -30,28 +28,6 @@ rank_emojis = {
     "TheLegend": "<:TheLegend:1475886108775546940>"
 }
 
-# Dynamically create a command for each rank
-for rank_name, emoji in rank_emojis.items():
-    @bot.command(name=rank_name.lower())
-    async def rank_command(ctx, rank=rank_name, emoji=emoji):
-        member = ctx.author
-        # Keep the original nickname, remove old rank if present
-        name_parts = member.display_name.split(" | ")
-        base_name = name_parts[0]  # original nickname
-        new_nick = f"{base_name} | {emoji}"
-        try:
-            await member.edit(nick=new_nick)
-            await ctx.send(f"✅ Nickname updated: {new_nick}")
-        except discord.Forbidden:
-            await ctx.send("❌ Cannot change your nickname. Make sure my role is above yours and I have Manage Nicknames permission.")
-
-@bot.event
-async def on_ready():
-    print(f"{bot.user} is online!")
-
-# Run bot
-token = os.getenv("DISCORD_TOKEN")
-if token:
-    bot.run(token)
-else:
-    print("DISCORD_TOKEN not set!")
+@bot.command()
+async def rank(ctx, rank_name: str):
+    rank
