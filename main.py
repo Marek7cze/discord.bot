@@ -3,9 +3,10 @@ from discord.ext import commands
 import os
 import asyncio
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Load all cogs in 'cogs/' folder
+# Load all cogs
 async def load_cogs():
     for filename in os.listdir("./cogs"):
         if filename.endswith(".py"):
