@@ -2,10 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-GUILD_ID = 1247900579586642021
-
-# Map of rank names → emoji IDs
-RANK_EMOJIS = {
+rank_emojis = {
     "Bronze1": "<:Bronze1:1475882755664384154>",
     "Bronze2": "<:Bronze2:1475883215154712758>",
     "Bronze3": "<:Bronze3:1475882893804044402>",
@@ -26,37 +23,31 @@ RANK_EMOJIS = {
     "TheLegend": "<:TheLegend:1475886108775546940>"
 }
 
+GUILD_ID = 1247900579586642021
+
 class SetRank(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="setrank",
-        description="Set a rank emoji to a user"
-    )
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.command(name="setrank", description="Set a rank emoji to a user")
     @app_commands.describe(user="The user to change nickname", rank="The rank to assign")
     async def setrank(self, interaction: discord.Interaction, user: discord.Member, rank: str):
-        rank = rank.replace(" ", "").capitalize()
-        if rank not in RANK_EMOJIS:
+        rank_key = rank.replace(" ", "").capitalize()
+        if rank_key not in rank_emojis:
             await interaction.response.send_message(
-                f"❌ Rank not found. Available ranks: {', '.join(RANK_EMOJIS.keys())}",
+                f"❌ Rank not found. Available ranks: {', '.join(rank_emojis.keys())}",
                 ephemeral=True
             )
             return
 
-        emoji = RANK_EMOJIS[rank]
-
-        # Keep part of nickname before " | " if exists
+        emoji = rank_emojis[rank_key]
         name_parts = user.display_name.split(" | ")
         base_name = name_parts[0]
         new_nick = f"{base_name} | {emoji}"
 
         try:
             await user.edit(nick=new_nick)
-            await interaction.response.send_message(
-                f"✅ {user.display_name} now has {emoji} for rank {rank}"
-            )
+            await interaction.response.send_message(f"✅ {user.display_name} now has {emoji} for rank {rank_key}")
         except discord.Forbidden:
             await interaction.response.send_message(
                 "❌ Cannot change nickname. Make sure my role is above theirs and I have Manage Nicknames permission.",
