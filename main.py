@@ -162,26 +162,8 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="setrank", description="Set a rank emoji to a user")
-@app_commands.describe(user="Discord member", rank="Rank to assign")
-async def setrank(interaction: discord.Interaction, user: discord.Member, rank: str):
-    # Normalize rank input
-    rank_key = rank.replace(" ", "").replace("IV","4").replace("III","3").replace("II","2").replace("I","1").capitalize()
-    if rank_key not in RANK_EMOJIS:
-        await interaction.response.send_message(f"❌ Rank not found. Available: {', '.join(RANK_EMOJIS.keys())}", ephemeral=True)
-        return
-    emoji = RANK_EMOJIS[rank_key]
-    # Check bot permission
-    if interaction.guild.me.top_role <= user.top_role:
-        await interaction.response.send_message("❌ Cannot change this user's nickname.", ephemeral=True)
-        return
-    base_name = user.display_name.split(" | ")[0]
-    new_nick = f"{base_name} | {emoji}"
-    try:
-        await user.edit(nick=new_nick)
-        await interaction.response.send_message(f"✅ {user.display_name} now has {emoji} for rank {rank_key}")
-    except discord.Forbidden:
-        await interaction.response.send_message("❌ Cannot change nickname. Check my role.", ephemeral=True)
+
+        
 
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
