@@ -1,11 +1,8 @@
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands
 import sqlite3
-import asyncio
 
-GUILD_ID = 1247900579586642021
-LEADERBOARD_CHANNEL_ID = 1474813234795249734  # Your leaderboard channel
+LEADERBOARD_CHANNEL_ID = 1474813234795249734
 RANKS = [
  "NO RANK", "🟫 Bronze I", "🟫 Bronze II", "🟫 Bronze III", "🟫 Bronze IV",
  "⬜ Silver I", "⬜ Silver II", "⬜ Silver III", "⬜ Silver IV",
@@ -25,8 +22,7 @@ class Leaderboard(commands.Cog):
     async def update_leaderboard(self):
         await self.bot.wait_until_ready()
         channel = self.bot.get_channel(LEADERBOARD_CHANNEL_ID)
-        if channel is None:
-            print("Leaderboard channel not found!")
+        if not channel:
             return
 
         c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
@@ -45,7 +41,6 @@ class Leaderboard(commands.Cog):
 
         leaderboard_data.sort(key=lambda x: x[6], reverse=True)
         embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
-
         for idx, (name, standoff_id, comp, allies_, duel_, kd, score) in enumerate(leaderboard_data[:10], start=1):
             embed.add_field(
                 name=f"{idx}. {name} ({standoff_id})",
@@ -53,7 +48,6 @@ class Leaderboard(commands.Cog):
                 inline=False
             )
 
-        # Delete previous leaderboard messages sent by bot
         async for msg in channel.history(limit=20):
             if msg.author == self.bot.user and msg.embeds:
                 await msg.delete()
