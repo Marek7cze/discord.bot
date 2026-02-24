@@ -21,12 +21,14 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=8080, use_reloader=False)
 
-threading.Thread(target=run_flask, daemon=True).start()
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
 
 # -----------------------------
 # Bot setup
 # -----------------------------
-GUILD_ID = 1247900579586642021
+GUILD_ID = 1247900579586642021  # Replace with your server ID
 DAILY_CHANNEL_ID = 1474476859210076294
 LEADERBOARD_CHANNEL_ID = 1474813234795249734
 
@@ -103,8 +105,11 @@ async def reset_daily_code():
     await bot.wait_until_ready()
     while True:
         now = datetime.datetime.now()
-        next_midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        await asyncio.sleep((next_midnight - now).total_seconds())
+        next_midnight = (now + datetime.timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        sleep_seconds = (next_midnight - now).total_seconds()
+        await asyncio.sleep(sleep_seconds)
         daily_code = random.randint(1000, 9999)
         channel = bot.get_channel(DAILY_CHANNEL_ID)
         if channel:
@@ -150,7 +155,6 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
-# --- REMOVE command ---
 @bot.tree.command(name="remove", description="Remove a player completely")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
@@ -166,13 +170,10 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
-    # Delete from database
     c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
     conn.commit()
-
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
 
-# --- UPDATE KD ---
 @bot.tree.command(name="update_kd", description="Update a player's K/D")
 @app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
 async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value: float):
@@ -186,7 +187,6 @@ async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value
     update_player(standoff_id, "kd", kd_value)
     await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
 
-# --- UPDATE RANK ---
 @bot.tree.command(name="update_rank", description="Update a player's rank")
 @app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank emoji from RANKS")
 async def update_rank(interaction: discord.Interaction, standoff_id: str, field: str, rank_value: str):
@@ -194,7 +194,7 @@ async def update_rank(interaction: discord.Interaction, standoff_id: str, field:
         await interaction.response.send_message("Field must be: competitive, allies, duel", ephemeral=True)
         return
     if rank_value not in RANKS:
-        await interaction.response.send_message("Rank must be one of the RANKS emojis.", ephemeral=True)
+        await interaction.response.send_message(f"Rank must be one of the RANKS emojis.", ephemeral=True)
         return
     update_player(standoff_id, field.lower(), rank_value)
     await interaction.response.send_message(f"{field.capitalize()} updated to {rank_value} for {standoff_id}")
@@ -238,11 +238,13 @@ async def auto_leaderboard():
 async def on_ready():
     print(f"{bot.user} is online!")
     try:
-        # Sync commands to the guild (instant registration)
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("✅ Slash commands synced")
+        guild = discord.Object(id=GUILD_ID)
+        await bot.tree.clear_commands(guild=guild)   # Remove old commands
+        await bot.tree.sync(guild=guild)            # Sync fresh commands
+        print("✅ Slash commands synced to guild")
     except Exception as e:
         print("Sync error:", e)
+
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
     bot.loop.create_task(reset_daily_code())
