@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord import app_commands
 import os
 import asyncio
@@ -10,7 +10,7 @@ from flask import Flask
 import threading
 
 # =========================================================
-# RAILWAY WEB SERVER (REQUIRED)
+# RAILWAY WEB SERVER
 # =========================================================
 app = Flask(__name__)
 
@@ -25,11 +25,10 @@ def run_web():
 threading.Thread(target=run_web, daemon=True).start()
 
 # =========================================================
-# DISCORD CONFIG
+# CONFIG
 # =========================================================
 GUILD_ID = 1247900579586642021
 DAILY_CHANNEL_ID = 1474476859210076294
-LEADERBOARD_CHANNEL_ID = 1474813234795249734
 
 GUILD_OBJECT = discord.Object(id=GUILD_ID)
 
@@ -40,7 +39,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =========================================================
-# DATABASE (Safe for Railway)
+# DATABASE
 # =========================================================
 conn = sqlite3.connect("player_stats.db", check_same_thread=False)
 c = conn.cursor()
@@ -53,7 +52,7 @@ CREATE TABLE IF NOT EXISTS players (
     competitive TEXT DEFAULT '❌ NO RANK',
     allies TEXT DEFAULT '❌ NO RANK',
     duel TEXT DEFAULT '❌ NO RANK',
-    kd REAL DEFAULT 0.00
+    kd REAL DEFAULT 0.0
 )
 """)
 conn.commit()
@@ -67,13 +66,39 @@ def get_player(standoff_id):
     c.execute("SELECT * FROM players WHERE standoff_id = ?", (standoff_id,))
     return c.fetchone()
 
-def get_player_by_discord(discord_id):
-    c.execute("SELECT * FROM players WHERE discord_id = ?", (discord_id,))
-    return c.fetchone()
+def get_all_players():
+    c.execute("SELECT * FROM players")
+    return c.fetchall()
+
+def update_kd(standoff_id, kd):
+    c.execute("UPDATE players SET kd = ? WHERE standoff_id = ?", (kd, standoff_id))
+    conn.commit()
+
+def update_rank(standoff_id, mode, value):
+    if mode not in ["competitive", "allies", "duel"]:
+        return
+    c.execute(f"UPDATE players SET {mode} = ? WHERE standoff_id = ?", (value, standoff_id))
+    conn.commit()
 
 def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
     conn.commit()
+
+# =========================================================
+# RANKS LIST
+# =========================================================
+RANKS = [
+    "❌ NO RANK",
+    "Bronze",
+    "Silver",
+    "Gold",
+    "Phoenix",
+    "Ranger",
+    "Champion",
+    "Master",
+    "Elite",
+    "TheLegend"
+]
 
 # =========================================================
 # DAILY CODE
@@ -100,10 +125,6 @@ async def reset_daily_code():
 # =========================================================
 # COMMANDS
 # =========================================================
-@bot.tree.command(name="code", guild=GUILD_OBJECT)
-async def code(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Today's Code: `{daily_code}`")
-
 @bot.tree.command(name="register", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Your ID", name="Your Name")
 async def register(interaction: discord.Interaction, standoff_id: str, name: str):
@@ -113,19 +134,38 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
         return
 
     add_player(standoff_id, str(interaction.user.id), name)
-    await interaction.response.send_message("Registered successfully!", ephemeral=True)
+    await interaction.response.send_message("Registered!", ephemeral=True)
 
-@bot.tree.command(name="stats", guild=GUILD_OBJECT)
-async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
+@bot.tree.command(name="update_kd", guild=GUILD_OBJECT)
+@app_commands.describe(standoff_id="Player ID", kd="New KD")
+async def update_kd_command(interaction: discord.Interaction, standoff_id: str, kd: float):
 
-    if member:
-        player = get_player_by_discord(str(member.id))
-    elif standoff_id:
-        player = get_player(standoff_id)
-    else:
-        await interaction.response.send_message("Provide ID or member.", ephemeral=True)
+    if not get_player(standoff_id):
+        await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
+    update_kd(standoff_id, kd)
+    await interaction.response.send_message("KD Updated.")
+
+@bot.tree.command(name="update_rank", guild=GUILD_OBJECT)
+@app_commands.describe(standoff_id="Player ID", mode="competitive/allies/duel", rank="Rank name")
+async def update_rank_command(interaction: discord.Interaction, standoff_id: str, mode: str, rank: str):
+
+    if rank not in RANKS:
+        await interaction.response.send_message("Invalid rank.", ephemeral=True)
+        return
+
+    if not get_player(standoff_id):
+        await interaction.response.send_message("Player not found.", ephemeral=True)
+        return
+
+    update_rank(standoff_id, mode.lower(), rank)
+    await interaction.response.send_message("Rank updated.")
+
+@bot.tree.command(name="stats", guild=GUILD_OBJECT)
+async def stats(interaction: discord.Interaction, standoff_id: str):
+
+    player = get_player(standoff_id)
     if not player:
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
@@ -140,15 +180,26 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
 
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="remove", guild=GUILD_OBJECT)
-async def remove(interaction: discord.Interaction, standoff_id: str):
+@bot.tree.command(name="leaderboard", guild=GUILD_OBJECT)
+async def leaderboard(interaction: discord.Interaction):
 
-    if not get_player(standoff_id):
-        await interaction.response.send_message("Player not found.", ephemeral=True)
+    players = get_all_players()
+    if not players:
+        await interaction.response.send_message("No players registered.")
         return
 
-    remove_player(standoff_id)
-    await interaction.response.send_message("Removed successfully.")
+    sorted_players = sorted(players, key=lambda x: x[6], reverse=True)
+
+    embed = discord.Embed(title="🏆 Leaderboard", color=0xFFD700)
+
+    for i, player in enumerate(sorted_players[:10], start=1):
+        embed.add_field(
+            name=f"{i}. {player[2]} ({player[0]})",
+            value=f"K/D: {player[6]}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed)
 
 # =========================================================
 # STARTUP
