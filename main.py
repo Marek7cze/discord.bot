@@ -9,22 +9,26 @@ import sqlite3
 from flask import Flask
 import threading
 
-# -----------------------------
-# Flask Keep-Alive
-# -----------------------------
-app = Flask("")
+# =========================================================
+# FLASK KEEP ALIVE (Production Ready)
+# =========================================================
+app = Flask(__name__)
 
 @app.route("/")
 def home():
     return "Bot is alive!"
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 8080))  # REQUIRED for most hosts
     app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-# -----------------------------
-# Bot setup
-# -----------------------------
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
+
+# =========================================================
+# DISCORD SETUP
+# =========================================================
 GUILD_ID = 1247900579586642021
 DAILY_CHANNEL_ID = 1474476859210076294
 LEADERBOARD_CHANNEL_ID = 1474813234795249734
@@ -34,9 +38,9 @@ GUILD_OBJECT = discord.Object(id=GUILD_ID)
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# -----------------------------
-# Database setup (THREAD SAFE)
-# -----------------------------
+# =========================================================
+# DATABASE (Thread Safe)
+# =========================================================
 conn = sqlite3.connect("player_stats.db", check_same_thread=False)
 c = conn.cursor()
 
@@ -56,8 +60,10 @@ conn.commit()
 ALLOWED_FIELDS = {"competitive", "allies", "duel", "kd"}
 
 def add_player(standoff_id, discord_id, name):
-    c.execute("INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
-              (standoff_id, discord_id, name))
+    c.execute(
+        "INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
+        (standoff_id, discord_id, name),
+    )
     conn.commit()
 
 def get_player(standoff_id):
@@ -78,9 +84,9 @@ def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
     conn.commit()
 
-# -----------------------------
-# Ranks
-# -----------------------------
+# =========================================================
+# RANKS
+# =========================================================
 RANKS = [
     "❌ NO RANK",
     "<:Bronze1:1475882755664384154>",
@@ -103,9 +109,9 @@ RANKS = [
     "<:TheLegend:1475886108775546940>"
 ]
 
-# -----------------------------
-# Daily code
-# -----------------------------
+# =========================================================
+# DAILY CODE SYSTEM
+# =========================================================
 daily_code = random.randint(1000, 9999)
 
 async def reset_daily_code():
@@ -128,23 +134,28 @@ async def reset_daily_code():
                 f"🎯 **Today's Access Code:** `{daily_code}`\n📅 Date: {datetime.date.today()}"
             )
 
-# -----------------------------
-# Slash commands (Guild Synced)
-# -----------------------------
+# =========================================================
+# SLASH COMMANDS (Guild Synced = Instant)
+# =========================================================
 @bot.tree.command(name="code", description="Get today's access code", guild=GUILD_OBJECT)
 async def code(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Today's Access Code: `{daily_code}`")
+    await interaction.response.send_message(
+        f"Today's Access Code: `{daily_code}`"
+    )
 
 @bot.tree.command(name="register", description="Register your Standoff 2 account", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Your Standoff 2 ID", name="Your in-game name")
 async def register(interaction: discord.Interaction, standoff_id: str, name: str):
+
     if get_player(standoff_id):
         await interaction.response.send_message(
-            f"Player {standoff_id} already registered.", ephemeral=True
+            f"Player {standoff_id} already registered.",
+            ephemeral=True
         )
         return
 
     add_player(standoff_id, str(interaction.user.id), name)
+
     await interaction.response.send_message(
         f"✅ Registered {name} with Standoff ID {standoff_id}!",
         ephemeral=True
@@ -160,21 +171,25 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
         player = get_player(standoff_id)
     else:
         await interaction.response.send_message(
-            "Provide a Discord user or a Standoff ID.", ephemeral=True
+            "Provide a Discord user or a Standoff ID.",
+            ephemeral=True
         )
         return
 
     if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
+        await interaction.response.send_message(
+            "Player not found.",
+            ephemeral=True
+        )
         return
 
     _, discord_id, name, competitive, allies, duel, kd = player
 
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
     embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
-    embed.add_field(name="Competitive", value=competitive, inline=True)
-    embed.add_field(name="Allies", value=allies, inline=True)
-    embed.add_field(name="Duel", value=duel, inline=True)
+    embed.add_field(name="Competitive", value=competitive)
+    embed.add_field(name="Allies", value=allies)
+    embed.add_field(name="Duel", value=duel)
     embed.set_footer(text=f"K/D: {kd:.2f}")
 
     await interaction.response.send_message(embed=embed)
@@ -189,22 +204,27 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         player = get_player(standoff_id)
     else:
         await interaction.response.send_message(
-            "Provide a Discord user or a Standoff ID.", ephemeral=True
+            "Provide a Discord user or a Standoff ID.",
+            ephemeral=True
         )
         return
 
     if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
+        await interaction.response.send_message(
+            "Player not found.",
+            ephemeral=True
+        )
         return
 
     remove_player(player[0])
+
     await interaction.response.send_message(
         f"✅ Removed player {player[2]} ({player[0]}) from database."
     )
 
-# -----------------------------
-# Leaderboard task (NO SPAM)
-# -----------------------------
+# =========================================================
+# AUTO LEADERBOARD (No Deleting Spam)
+# =========================================================
 leaderboard_message = None
 
 @tasks.loop(minutes=5)
@@ -217,20 +237,21 @@ async def auto_leaderboard():
 
     c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
     players = c.fetchall()
+
     if not players:
         return
 
     rank_values = {rank: i for i, rank in enumerate(RANKS)}
-
     leaderboard_data = []
+
     for name, standoff_id, competitive, allies, duel, kd in players:
-        total_score = (
+        score = (
             rank_values.get(competitive, 0)
             + rank_values.get(allies, 0)
             + rank_values.get(duel, 0)
             + kd
         )
-        leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd, total_score))
+        leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd, score))
 
     leaderboard_data.sort(key=lambda x: x[6], reverse=True)
 
@@ -248,9 +269,9 @@ async def auto_leaderboard():
     else:
         leaderboard_message = await channel.send(embed=embed)
 
-# -----------------------------
-# Setup Hook (Correct way)
-# -----------------------------
+# =========================================================
+# PROPER STARTUP (No duplicate loops)
+# =========================================================
 async def setup_hook():
     await bot.tree.sync(guild=GUILD_OBJECT)
     auto_leaderboard.start()
@@ -258,12 +279,12 @@ async def setup_hook():
 
 bot.setup_hook = setup_hook
 
-# -----------------------------
-# Run bot
-# -----------------------------
+# =========================================================
+# RUN BOT
+# =========================================================
 token = os.getenv("DISCORD_TOKEN")
 
-if token:
-    bot.run(token)
-else:
+if not token:
     print("DISCORD_TOKEN not set!")
+else:
+    bot.run(token)
