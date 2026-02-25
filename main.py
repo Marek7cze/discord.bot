@@ -58,8 +58,10 @@ CREATE TABLE IF NOT EXISTS players (
 conn.commit()
 
 def add_player(standoff_id, discord_id, name):
-    c.execute("INSERT OR IGNORE INTO players VALUES (?, ?, ?, '❌ NO RANK', '❌ NO RANK', '❌ NO RANK', 0.0)",
-              (standoff_id, discord_id, name))
+    c.execute(
+        "INSERT OR IGNORE INTO players VALUES (?, ?, ?, '❌ NO RANK', '❌ NO RANK', '❌ NO RANK', 0.0)",
+        (standoff_id, discord_id, name)
+    )
     conn.commit()
 
 def get_player(standoff_id):
@@ -76,16 +78,17 @@ def update_kd(standoff_id, kd):
 
 def update_rank(standoff_id, mode, value):
     if mode not in ["competitive", "allies", "duel"]:
-        return
+        return False
     c.execute(f"UPDATE players SET {mode} = ? WHERE standoff_id = ?", (value, standoff_id))
     conn.commit()
+    return True
 
 def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
     conn.commit()
 
 # =========================================================
-# RANKS LIST
+# RANKS
 # =========================================================
 RANKS = [
     "❌ NO RANK",
@@ -136,6 +139,19 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
     add_player(standoff_id, str(interaction.user.id), name)
     await interaction.response.send_message("Registered!", ephemeral=True)
 
+
+@bot.tree.command(name="remove", guild=GUILD_OBJECT)
+@app_commands.describe(standoff_id="Player ID")
+async def remove(interaction: discord.Interaction, standoff_id: str):
+
+    if not get_player(standoff_id):
+        await interaction.response.send_message("Player not found.", ephemeral=True)
+        return
+
+    remove_player(standoff_id)
+    await interaction.response.send_message("✅ Player removed.")
+
+
 @bot.tree.command(name="update_kd", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Player ID", kd="New KD")
 async def update_kd_command(interaction: discord.Interaction, standoff_id: str, kd: float):
@@ -147,6 +163,7 @@ async def update_kd_command(interaction: discord.Interaction, standoff_id: str, 
     update_kd(standoff_id, kd)
     await interaction.response.send_message("KD Updated.")
 
+
 @bot.tree.command(name="update_rank", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Player ID", mode="competitive/allies/duel", rank="Rank name")
 async def update_rank_command(interaction: discord.Interaction, standoff_id: str, mode: str, rank: str):
@@ -155,14 +172,15 @@ async def update_rank_command(interaction: discord.Interaction, standoff_id: str
         await interaction.response.send_message("Invalid rank.", ephemeral=True)
         return
 
-    if not get_player(standoff_id):
-        await interaction.response.send_message("Player not found.", ephemeral=True)
+    if not update_rank(standoff_id, mode.lower(), rank):
+        await interaction.response.send_message("Invalid mode. Use competitive/allies/duel.", ephemeral=True)
         return
 
-    update_rank(standoff_id, mode.lower(), rank)
     await interaction.response.send_message("Rank updated.")
 
+
 @bot.tree.command(name="stats", guild=GUILD_OBJECT)
+@app_commands.describe(standoff_id="Player ID")
 async def stats(interaction: discord.Interaction, standoff_id: str):
 
     player = get_player(standoff_id)
@@ -179,6 +197,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str):
     embed.set_footer(text=f"K/D: {kd}")
 
     await interaction.response.send_message(embed=embed)
+
 
 @bot.tree.command(name="leaderboard", guild=GUILD_OBJECT)
 async def leaderboard(interaction: discord.Interaction):
