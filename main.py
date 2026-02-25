@@ -70,29 +70,33 @@ def update_player(standoff_id, field, value):
     c.execute(f"UPDATE players SET {field} = ? WHERE standoff_id = ?", (value, standoff_id))
     conn.commit()
 
+def remove_player(standoff_id):
+    c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
+    conn.commit()
+
 # -----------------------------
-# Ranks (for leaderboard only)
+# Ranks
 # -----------------------------
 RANKS = [
- "❌ NO RANK",
- "<:Bronze1:1475882755664384154>",
- "<:Bronze2:1475883215154712758>",
- "<:Bronze3:1475882893804044402>",
- "<:Bronze4:1475882954831167508>",
- "<:Silver1:1475887681454997739>",
- "<:Silver2:1475885246292430901>",
- "<:Silver3:1475885332128993342>",
- "<:Silver4:1475885397157478540>",
- "<:Gold1:1475887285202583605>",
- "<:Gold2:1475887345877389435>",
- "<:Gold3:1475887439456243815>",
- "<:Gold4:1475887516816248852>",
- "<:Phoenix:1475885669271474328>",
- "<:Ranger:1475885739811278969>",
- "<:Champion:1475887737050763326>",
- "<:Master:1475885935416705284>",
- "<:Elite:1475886033878122538>",
- "<:TheLegend:1475886108775546940>"
+    "❌ NO RANK",
+    "<:Bronze1:1475882755664384154>",
+    "<:Bronze2:1475883215154712758>",
+    "<:Bronze3:1475882893804044402>",
+    "<:Bronze4:1475882954831167508>",
+    "<:Silver1:1475887681454997739>",
+    "<:Silver2:1475885246292430901>",
+    "<:Silver3:1475885332128993342>",
+    "<:Silver4:1475885397157478540>",
+    "<:Gold1:1475887285202583605>",
+    "<:Gold2:1475887345877389435>",
+    "<:Gold3:1475887439456243815>",
+    "<:Gold4:1475887516816248852>",
+    "<:Phoenix:1475885669271474328>",
+    "<:Ranger:1475885739811278969>",
+    "<:Champion:1475887737050763326>",
+    "<:Master:1475885935416705284>",
+    "<:Elite:1475886033878122538>",
+    "<:TheLegend:1475886108775546940>"
 ]
 
 # -----------------------------
@@ -155,9 +159,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     embed.set_footer(text=f"K/D: {kd:.2f} • Last updated")
     await interaction.response.send_message(embed=embed)
 
-# -----------------------------
-# /remove command
-# -----------------------------
+# --- REMOVE COMMAND ---
 @bot.tree.command(name="remove", description="Remove a player completely")
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
@@ -173,41 +175,8 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
-    # Remove from DB
-    c.execute("DELETE FROM players WHERE standoff_id = ?", (player[0],))
-    conn.commit()
+    remove_player(player[0])
     await interaction.response.send_message(f"✅ Removed player {player[2]} ({player[0]}) from database.")
-
-# -----------------------------
-# Update KD command
-# -----------------------------
-@bot.tree.command(name="update_kd", description="Update a player's K/D")
-@app_commands.describe(standoff_id="Standoff 2 ID", kd_value="New K/D value")
-async def update_kd(interaction: discord.Interaction, standoff_id: str, kd_value: float):
-    if not 0.0 <= kd_value <= 1000.0:
-        await interaction.response.send_message("K/D must be 0.00–1000.00", ephemeral=True)
-        return
-    player = get_player(standoff_id)
-    if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
-        return
-    update_player(standoff_id, "kd", kd_value)
-    await interaction.response.send_message(f"K/D updated to {kd_value:.2f} for {standoff_id}")
-
-# -----------------------------
-# Update rank command (emojis only)
-# -----------------------------
-@bot.tree.command(name="update_rank", description="Update a player's rank")
-@app_commands.describe(standoff_id="Standoff 2 ID", field="competitive, allies, duel", rank_value="Rank emoji from RANKS")
-async def update_rank(interaction: discord.Interaction, standoff_id: str, field: str, rank_value: str):
-    if field.lower() not in ["competitive", "allies", "duel"]:
-        await interaction.response.send_message("Field must be: competitive, allies, duel", ephemeral=True)
-        return
-    if rank_value not in RANKS:
-        await interaction.response.send_message(f"Rank must be one of the RANKS emojis.", ephemeral=True)
-        return
-    update_player(standoff_id, field.lower(), rank_value)
-    await interaction.response.send_message(f"{field.capitalize()} updated to {rank_value} for {standoff_id}")
 
 # -----------------------------
 # Leaderboard task
@@ -247,18 +216,13 @@ async def auto_leaderboard():
 @bot.event
 async def on_ready():
     print(f"{bot.user} is online!")
-
-    # Proper guild sync
-    try:
-        guild = discord.utils.get(bot.guilds, id=GUILD_ID)
-        if guild is None:
-            print("Guild not found, syncing globally.")
-            await bot.tree.sync()
-        else:
+    guild = bot.get_guild(GUILD_ID)
+    if guild:
+        try:
             await bot.tree.sync(guild=guild)
-            print("✅ Slash commands synced to guild")
-    except Exception as e:
-        print("Sync error:", e)
+            print("✅ Slash commands synced")
+        except Exception as e:
+            print("Sync error:", e)
 
     if not auto_leaderboard.is_running():
         auto_leaderboard.start()
