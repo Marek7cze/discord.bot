@@ -10,7 +10,7 @@ from flask import Flask
 import threading
 
 # =========================================================
-# FLASK KEEP ALIVE (Production Safe)
+# FLASK KEEP ALIVE
 # =========================================================
 app = Flask(__name__)
 
@@ -22,12 +22,10 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
+threading.Thread(target=run_flask, daemon=True).start()
 
 # =========================================================
-# DISCORD CONFIG
+# CONFIG
 # =========================================================
 GUILD_ID = 1247900579586642021
 DAILY_CHANNEL_ID = 1474476859210076294
@@ -56,8 +54,6 @@ CREATE TABLE IF NOT EXISTS players (
 )
 """)
 conn.commit()
-
-ALLOWED_FIELDS = {"competitive", "allies", "duel", "kd"}
 
 def add_player(standoff_id, discord_id, name):
     c.execute(
@@ -133,7 +129,9 @@ async def reset_daily_code():
 # =========================================================
 @bot.tree.command(name="code", description="Get today's access code", guild=GUILD_OBJECT)
 async def code(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Today's Access Code: `{daily_code}`")
+    await interaction.response.send_message(
+        f"Today's Access Code: `{daily_code}`"
+    )
 
 @bot.tree.command(name="register", description="Register your Standoff 2 account", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Your Standoff 2 ID", name="Your in-game name")
@@ -141,7 +139,7 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
 
     if get_player(standoff_id):
         await interaction.response.send_message(
-            f"Player {standoff_id} already registered.",
+            "Player already registered.",
             ephemeral=True
         )
         return
@@ -149,7 +147,7 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
     add_player(standoff_id, str(interaction.user.id), name)
 
     await interaction.response.send_message(
-        f"✅ Registered {name} with Standoff ID {standoff_id}!",
+        f"✅ Registered {name}!",
         ephemeral=True
     )
 
@@ -162,7 +160,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     elif standoff_id:
         player = get_player(standoff_id)
     else:
-        await interaction.response.send_message("Provide a user or ID.", ephemeral=True)
+        await interaction.response.send_message("Provide user or ID.", ephemeral=True)
         return
 
     if not player:
@@ -188,7 +186,7 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
     elif standoff_id:
         player = get_player(standoff_id)
     else:
-        await interaction.response.send_message("Provide a user or ID.", ephemeral=True)
+        await interaction.response.send_message("Provide user or ID.", ephemeral=True)
         return
 
     if not player:
@@ -196,12 +194,10 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
         return
 
     remove_player(player[0])
-    await interaction.response.send_message(
-        f"✅ Removed {player[2]} ({player[0]})"
-    )
+    await interaction.response.send_message("✅ Player removed.")
 
 # =========================================================
-# LEADERBOARD TASK
+# LEADERBOARD
 # =========================================================
 leaderboard_message = None
 
@@ -221,14 +217,9 @@ async def auto_leaderboard():
     rank_values = {rank: i for i, rank in enumerate(RANKS)}
 
     leaderboard_data = []
-    for name, standoff_id, competitive, allies, duel, kd in players:
-        score = (
-            rank_values.get(competitive, 0)
-            + rank_values.get(allies, 0)
-            + rank_values.get(duel, 0)
-            + kd
-        )
-        leaderboard_data.append((name, standoff_id, competitive, allies, duel, kd, score))
+    for name, sid, comp, al, du, kd in players:
+        score = rank_values.get(comp, 0) + rank_values.get(al, 0) + rank_values.get(du, 0) + kd
+        leaderboard_data.append((name, sid, comp, al, du, kd, score))
 
     leaderboard_data.sort(key=lambda x: x[6], reverse=True)
 
@@ -247,20 +238,10 @@ async def auto_leaderboard():
         leaderboard_message = await channel.send(embed=embed)
 
 # =========================================================
-# CLEAN SYNC (REMOVES DUPLICATES PERMANENTLY)
+# STARTUP
 # =========================================================
 async def setup_hook():
-
-    # Remove ALL global commands permanently
-    bot.tree.clear_commands(guild=None)
-    await bot.tree.sync()
-
-    # Remove old guild commands
-    bot.tree.clear_commands(guild=GUILD_OBJECT)
-
-    # Sync fresh guild-only commands
     await bot.tree.sync(guild=GUILD_OBJECT)
-
     auto_leaderboard.start()
     bot.loop.create_task(reset_daily_code())
 
@@ -271,7 +252,7 @@ bot.setup_hook = setup_hook
 # =========================================================
 token = os.getenv("DISCORD_TOKEN")
 
-if not token:
-    print("DISCORD_TOKEN not set!")
-else:
+if token:
     bot.run(token)
+else:
+    print("DISCORD_TOKEN not set!")
