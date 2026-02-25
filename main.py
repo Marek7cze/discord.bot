@@ -19,11 +19,8 @@ def home():
     return "Bot is alive!"
 
 def run_flask():
-    app.run(host="0.0.0.0", port=8080, use_reloader=False)
-
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 # -----------------------------
 # Bot setup
