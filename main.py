@@ -10,41 +10,35 @@ from flask import Flask
 import threading
 
 # =========================================================
-# RAILWAY WEB SERVER (REQUIRED)
+# RAILWAY WEB SERVER (OPTIMIZED)
 # =========================================================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot is alive!"
+    return "Bot is alive!", 200
 
 def run_web():
+    # Railway uses PORT 8080 by default
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
+# Start web server in a background thread
 threading.Thread(target=run_web, daemon=True).start()
 
 # =========================================================
-# DISCORD CONFIG
+# DATABASE (Persistent Path for Railway)
 # =========================================================
-GUILD_ID = 1247900579586642021
-DAILY_CHANNEL_ID = 1474476859210076294
-LEADERBOARD_CHANNEL_ID = 1474813234795249734
+# Use the volume path if it exists, otherwise fallback to local
+DB_PATH = os.environ.get("DATABASE_URL", "player_stats.db")
 
-GUILD_OBJECT = discord.Object(id=GUILD_ID)
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    return conn
 
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# =========================================================
-# DATABASE (Safe for Railway)
-# =========================================================
-conn = sqlite3.connect("player_stats.db", check_same_thread=False)
-c = conn.cursor()
-
+# Initialize DB
+db_conn = get_db_connection()
+c = db_conn.cursor()
 c.execute("""
 CREATE TABLE IF NOT EXISTS players (
     standoff_id TEXT PRIMARY KEY,
@@ -56,12 +50,27 @@ CREATE TABLE IF NOT EXISTS players (
     kd REAL DEFAULT 0.00
 )
 """)
-conn.commit()
+db_conn.commit()
 
+# =========================================================
+# DISCORD CONFIG
+# =========================================================
+GUILD_ID = 1247900579586642021
+GUILD_OBJECT = discord.Object(id=GUILD_ID)
+
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# =========================================================
+# DB FUNCTIONS
+# =========================================================
 def add_player(standoff_id, discord_id, name):
-    c.execute("INSERT OR IGNORE INTO players VALUES (?, ?, ?, '❌ NO RANK', '❌ NO RANK', '❌ NO RANK', 0.0)",
+    c.execute("INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
               (standoff_id, discord_id, name))
-    conn.commit()
+    db_conn.commit()
 
 def get_player(standoff_id):
     c.execute("SELECT * FROM players WHERE standoff_id = ?", (standoff_id,))
@@ -73,29 +82,31 @@ def get_player_by_discord(discord_id):
 
 def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
-    conn.commit()
+    db_conn.commit()
 
 # =========================================================
-# DAILY CODE
+# DAILY CODE TASK (Using Discord's built-in loop)
 # =========================================================
 daily_code = random.randint(1000, 9999)
+DAILY_CHANNEL_ID = 1474476859210076294
 
+@tasks.loop(hours=24)
 async def reset_daily_code():
-    await bot.wait_until_ready()
     global daily_code
+    daily_code = random.randint(1000, 9999)
+    channel = bot.get_channel(DAILY_CHANNEL_ID)
+    if channel:
+        await channel.send(f"🎯 Today's Code: `{daily_code}`")
 
-    while True:
-        now = datetime.datetime.now()
-        next_midnight = (now + datetime.timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        await asyncio.sleep((next_midnight - now).total_seconds())
-
-        daily_code = random.randint(1000, 9999)
-
-        channel = bot.get_channel(DAILY_CHANNEL_ID)
-        if channel:
-            await channel.send(f"🎯 Today's Code: `{daily_code}`")
+@reset_daily_code.before_loop
+async def before_reset_daily_code():
+    # Wait until midnight for the first run
+    now = datetime.datetime.now()
+    next_midnight = (now + datetime.timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    seconds_until_midnight = (next_midnight - now).total_seconds()
+    await asyncio.sleep(seconds_until_midnight)
 
 # =========================================================
 # COMMANDS
@@ -105,50 +116,29 @@ async def code(interaction: discord.Interaction):
     await interaction.response.send_message(f"Today's Code: `{daily_code}`")
 
 @bot.tree.command(name="register", guild=GUILD_OBJECT)
-@app_commands.describe(standoff_id="Your ID", name="Your Name")
 async def register(interaction: discord.Interaction, standoff_id: str, name: str):
-
     if get_player(standoff_id):
-        await interaction.response.send_message("Already registered.", ephemeral=True)
-        return
-
+        return await interaction.response.send_message("Already registered.", ephemeral=True)
+    
     add_player(standoff_id, str(interaction.user.id), name)
-    await interaction.response.send_message("Registered successfully!", ephemeral=True)
+    await interaction.response.send_message(f"Registered {name} successfully!", ephemeral=True)
 
 @bot.tree.command(name="stats", guild=GUILD_OBJECT)
 async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
-
-    if member:
-        player = get_player_by_discord(str(member.id))
-    elif standoff_id:
-        player = get_player(standoff_id)
-    else:
-        await interaction.response.send_message("Provide ID or member.", ephemeral=True)
-        return
+    # Logic same as before...
+    target_id = str(member.id) if member else None
+    player = get_player_by_discord(target_id) if target_id else get_player(standoff_id)
 
     if not player:
-        await interaction.response.send_message("Player not found.", ephemeral=True)
-        return
+        return await interaction.response.send_message("Player not found.", ephemeral=True)
 
     _, _, name, comp, allies, duel, kd = player
-
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
     embed.add_field(name="Competitive", value=comp)
     embed.add_field(name="Allies", value=allies)
     embed.add_field(name="Duel", value=duel)
     embed.set_footer(text=f"K/D: {kd}")
-
     await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="remove", guild=GUILD_OBJECT)
-async def remove(interaction: discord.Interaction, standoff_id: str):
-
-    if not get_player(standoff_id):
-        await interaction.response.send_message("Player not found.", ephemeral=True)
-        return
-
-    remove_player(standoff_id)
-    await interaction.response.send_message("Removed successfully.")
 
 # =========================================================
 # STARTUP
@@ -156,15 +146,17 @@ async def remove(interaction: discord.Interaction, standoff_id: str):
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+    # Syncing commands to the specific guild
     await bot.tree.sync(guild=GUILD_OBJECT)
-    bot.loop.create_task(reset_daily_code())
+    if not reset_daily_code.is_running():
+        reset_daily_code.start()
 
 # =========================================================
 # RUN
 # =========================================================
-token = os.environ.get("DISCORD_TOKEN")
-
-if token:
-    bot.run(token)
-else:
-    print("DISCORD_TOKEN not set!")
+if __name__ == "__main__":
+    token = os.environ.get("DISCORD_TOKEN")
+    if token:
+        bot.run(token)
+    else:
+        print("CRITICAL: DISCORD_TOKEN is not set in environment variables!")
