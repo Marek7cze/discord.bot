@@ -10,7 +10,7 @@ from flask import Flask
 import threading
 
 # =========================================================
-# FLASK KEEP ALIVE (Production Ready)
+# FLASK KEEP ALIVE (Production Safe)
 # =========================================================
 app = Flask(__name__)
 
@@ -19,7 +19,7 @@ def home():
     return "Bot is alive!"
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8080))  # REQUIRED for most hosts
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 flask_thread = threading.Thread(target=run_flask)
@@ -27,7 +27,7 @@ flask_thread.daemon = True
 flask_thread.start()
 
 # =========================================================
-# DISCORD SETUP
+# DISCORD CONFIG
 # =========================================================
 GUILD_ID = 1247900579586642021
 DAILY_CHANNEL_ID = 1474476859210076294
@@ -62,7 +62,7 @@ ALLOWED_FIELDS = {"competitive", "allies", "duel", "kd"}
 def add_player(standoff_id, discord_id, name):
     c.execute(
         "INSERT OR IGNORE INTO players (standoff_id, discord_id, name) VALUES (?, ?, ?)",
-        (standoff_id, discord_id, name),
+        (standoff_id, discord_id, name)
     )
     conn.commit()
 
@@ -73,12 +73,6 @@ def get_player(standoff_id):
 def get_player_by_discord(discord_id):
     c.execute("SELECT * FROM players WHERE discord_id = ?", (discord_id,))
     return c.fetchone()
-
-def update_player(standoff_id, field, value):
-    if field not in ALLOWED_FIELDS:
-        return
-    c.execute(f"UPDATE players SET {field} = ? WHERE standoff_id = ?", (value, standoff_id))
-    conn.commit()
 
 def remove_player(standoff_id):
     c.execute("DELETE FROM players WHERE standoff_id = ?", (standoff_id,))
@@ -135,13 +129,11 @@ async def reset_daily_code():
             )
 
 # =========================================================
-# SLASH COMMANDS (Guild Synced = Instant)
+# SLASH COMMANDS (Guild Only)
 # =========================================================
 @bot.tree.command(name="code", description="Get today's access code", guild=GUILD_OBJECT)
 async def code(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        f"Today's Access Code: `{daily_code}`"
-    )
+    await interaction.response.send_message(f"Today's Access Code: `{daily_code}`")
 
 @bot.tree.command(name="register", description="Register your Standoff 2 account", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Your Standoff 2 ID", name="Your in-game name")
@@ -161,7 +153,7 @@ async def register(interaction: discord.Interaction, standoff_id: str, name: str
         ephemeral=True
     )
 
-@bot.tree.command(name="stats", description="View a player's stats", guild=GUILD_OBJECT)
+@bot.tree.command(name="stats", description="View stats", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def stats(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
 
@@ -170,23 +162,16 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
     elif standoff_id:
         player = get_player(standoff_id)
     else:
-        await interaction.response.send_message(
-            "Provide a Discord user or a Standoff ID.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Provide a user or ID.", ephemeral=True)
         return
 
     if not player:
-        await interaction.response.send_message(
-            "Player not found.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
-    _, discord_id, name, competitive, allies, duel, kd = player
+    _, _, name, competitive, allies, duel, kd = player
 
     embed = discord.Embed(title=f"{name}'s Stats", color=0x3498DB)
-    embed.add_field(name="Standoff 2 ID", value=player[0], inline=False)
     embed.add_field(name="Competitive", value=competitive)
     embed.add_field(name="Allies", value=allies)
     embed.add_field(name="Duel", value=duel)
@@ -194,7 +179,7 @@ async def stats(interaction: discord.Interaction, standoff_id: str = None, membe
 
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="remove", description="Remove a player completely", guild=GUILD_OBJECT)
+@bot.tree.command(name="remove", description="Remove a player", guild=GUILD_OBJECT)
 @app_commands.describe(standoff_id="Standoff 2 ID", member="Discord member")
 async def remove(interaction: discord.Interaction, standoff_id: str = None, member: discord.Member = None):
 
@@ -203,27 +188,20 @@ async def remove(interaction: discord.Interaction, standoff_id: str = None, memb
     elif standoff_id:
         player = get_player(standoff_id)
     else:
-        await interaction.response.send_message(
-            "Provide a Discord user or a Standoff ID.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Provide a user or ID.", ephemeral=True)
         return
 
     if not player:
-        await interaction.response.send_message(
-            "Player not found.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Player not found.", ephemeral=True)
         return
 
     remove_player(player[0])
-
     await interaction.response.send_message(
-        f"✅ Removed player {player[2]} ({player[0]}) from database."
+        f"✅ Removed {player[2]} ({player[0]})"
     )
 
 # =========================================================
-# AUTO LEADERBOARD (No Deleting Spam)
+# LEADERBOARD TASK
 # =========================================================
 leaderboard_message = None
 
@@ -237,13 +215,12 @@ async def auto_leaderboard():
 
     c.execute("SELECT name, standoff_id, competitive, allies, duel, kd FROM players")
     players = c.fetchall()
-
     if not players:
         return
 
     rank_values = {rank: i for i, rank in enumerate(RANKS)}
-    leaderboard_data = []
 
+    leaderboard_data = []
     for name, standoff_id, competitive, allies, duel, kd in players:
         score = (
             rank_values.get(competitive, 0)
@@ -257,10 +234,10 @@ async def auto_leaderboard():
 
     embed = discord.Embed(title="🏆 All-Time Leaderboard", color=0xFFD700)
 
-    for idx, (name, standoff_id, comp, allies_, duel_, kd, score) in enumerate(leaderboard_data[:10], start=1):
+    for idx, (name, sid, comp, al, du, kd, score) in enumerate(leaderboard_data[:10], start=1):
         embed.add_field(
-            name=f"{idx}. {name} ({standoff_id})",
-            value=f"Competitive: {comp} | Allies: {allies_} | Duel: {duel_}\nK/D: {kd:.2f}",
+            name=f"{idx}. {name} ({sid})",
+            value=f"{comp} | {al} | {du}\nK/D: {kd:.2f}",
             inline=False
         )
 
@@ -270,17 +247,27 @@ async def auto_leaderboard():
         leaderboard_message = await channel.send(embed=embed)
 
 # =========================================================
-# PROPER STARTUP (No duplicate loops)
+# CLEAN SYNC (REMOVES DUPLICATES PERMANENTLY)
 # =========================================================
 async def setup_hook():
+
+    # Remove ALL global commands permanently
+    bot.tree.clear_commands(guild=None)
+    await bot.tree.sync()
+
+    # Remove old guild commands
+    bot.tree.clear_commands(guild=GUILD_OBJECT)
+
+    # Sync fresh guild-only commands
     await bot.tree.sync(guild=GUILD_OBJECT)
+
     auto_leaderboard.start()
     bot.loop.create_task(reset_daily_code())
 
 bot.setup_hook = setup_hook
 
 # =========================================================
-# RUN BOT
+# RUN
 # =========================================================
 token = os.getenv("DISCORD_TOKEN")
 
